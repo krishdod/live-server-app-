@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>Live Workspace — Access required</title>
+<style>
+:root {
+  --bg: #000;
+  --text: #e8eaed;
+  --muted: #888;
+  --panel: #0d0d0d;
+  --panel-border: #1a1a1a;
+  --btn: #1a1a1a;
+  --btn-text: #ccc;
+  --code-bg: #1e1e1e;
+  --code-border: #333;
+  --code-header: #252525;
+  --inline-code-bg: #2a2a2a;
+  --caret: #4ade80;
+  --badge: #2a2a2a;
+  --badge-text: #aaa;
+  --stream-bg: #1e3a5f;
+  --stream-text: #93c5fd;
+  --paused-bg: #3a2a10;
+  --paused-text: #fbbf24;
+}
+
+body.theme-light {
+  --bg: #f4f6f8;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --panel: #ffffff;
+  --panel-border: #e5e7eb;
+  --btn: #eef2f7;
+  --btn-text: #374151;
+  --code-bg: #0f172a;
+  --code-border: #1e293b;
+  --code-header: #1e293b;
+  --inline-code-bg: #e5e7eb;
+  --caret: #059669;
+  --badge: #e5e7eb;
+  --badge-text: #4b5563;
+  --stream-bg: #dbeafe;
+  --stream-text: #1d4ed8;
+  --paused-bg: #fef3c7;
+  --paused-text: #b45309;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Google Sans", "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+#passwordGate, #locked {
+  max-width: 420px;
+  margin: 100px auto;
+  text-align: center;
+  padding: 24px;
+}
+
+#passwordGate h2, #locked h2 { font-size: 22px; margin-bottom: 8px; font-weight: 400; }
+#passwordGate p, #locked p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+.container { max-width: 900px; margin: 0 auto; padding: 12px; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.logo { font-size: 16px; font-weight: 700; flex-shrink: 0; }
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#accessAdminBtn, #shareBtn, #autoCopyBtn, #focusBtn, #themeBtn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--btn);
+  color: var(--btn-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#shareBtn { background: #1e3a5f; color: #93c5fd; }
+body.theme-light #shareBtn { background: #dbeafe; color: #1d4ed8; }
+#autoCopyBtn.on { background: #052e16; color: #4ade80; }
+body.theme-light #autoCopyBtn.on { background: #d1fae5; color: #047857; }
+#autoCopyBtn:disabled { opacity: 0.85; cursor: default; }
+#focusBtn.on { background: #312e81; color: #c7d2fe; }
+body.theme-light #focusBtn.on { background: #e0e7ff; color: #3730a3; }
+
+#roleBadge, #liveBadge {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--badge);
+  color: var(--badge-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#liveBadge.streaming {
+  background: var(--stream-bg);
+  color: var(--stream-text);
+}
+
+#liveBadge.paused {
+  background: var(--paused-bg);
+  color: var(--paused-text);
+}
+
+#liveBadge.idle { display: none; }
+
+.status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.connected { background: #052e16; color: #4ade80; }
+body.theme-light .connected { background: #d1fae5; color: #047857; }
+.disconnected { background: #3a1a1a; color: #f87171; }
+body.theme-light .disconnected { background: #fee2e2; color: #b91c1c; }
+
+.workspace {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  min-height: calc(100vh - 100px);
+  padding: 32px 40px;
+}
+
+body.focus-mode .header,
+body.focus-mode .footer,
+body.focus-mode #remoteSelBar {
+  display: none !important;
+}
+
+body.focus-mode .container {
+  max-width: none;
+  width: 100%;
+  padding: 0;
+}
+
+body.focus-mode .workspace {
+  min-height: 100vh;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  padding: 56px clamp(16px, 4vw, 48px) 40px;
+}
+
+body.focus-mode #focusExit {
+  display: block;
+}
+
+#focusExit {
+  display: none;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--btn);
+  color: var(--btn-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#answer {
+  outline: none;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.75;
+  font-size: 15px;
+  color: var(--text);
+  min-height: 200px;
+  caret-color: var(--caret);
+  tab-size: 2;
+}
+
+body.focus-mode #answer {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  font-size: clamp(16px, 1.35vw, 20px);
+  line-height: 1.85;
+}
+
+/* Keep code blocks compact and unchanged in focus mode */
+body.focus-mode #answer .code-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin: 20px 0;
+}
+
+body.focus-mode #answer .code-block {
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+body.focus-mode #answer code.inline-code {
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+
+#answer .code-wrap {
+  display: block;
+  margin: 16px 0;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#answer .code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 8px 14px;
+  background: var(--code-header);
+  border-bottom: 1px solid var(--code-border);
+}
+
+#answer .code-wrap .code-lang {
+  font-family: "Google Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #c4c4c4;
+}
+
+#answer .code-copy {
+  border: 1px solid #3a3a3a;
+  background: #2a2a2a;
+  color: #d1d5db;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#answer .code-copy:hover { background: #333; color: #fff; }
+#answer .code-copy.copied {
+  background: #052e16;
+  border-color: #166534;
+  color: #4ade80;
+}
+
+#answer .code-block {
+  display: block;
+  margin: 0;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: "Consolas", "Courier New", ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #e8eaed;
+}
+
+#answer .tok-kw { color: #f472b6; }
+#answer .tok-str { color: #86efac; }
+#answer .tok-num { color: #93c5fd; }
+#answer .tok-cm { color: #6b7280; font-style: italic; }
+#answer .tok-fn { color: #c4b5fd; }
+
+#answer code.inline-code {
+  font-family: "Consolas", "Courier New", ui-monospace, monospace;
+  font-size: 0.92em;
+  background: var(--inline-code-bg);
+  color: var(--text);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+#answer.view-only { caret-color: transparent; }
+
+#answer:empty::before {
+  content: "Start typing or turn on Auto Copy to receive live text...";
+  color: #555;
+  pointer-events: none;
+}
+
+body.theme-light #answer:empty::before { color: #9ca3af; }
+
+#answer.view-only:empty::before { content: "Waiting for live content..."; }
+
+#remoteSelBar {
+  font-size: 12px;
+  color: #60a5fa;
+  background: #0d1f33;
+  border: 1px solid #1e3a5f;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  display: none;
+}
+
+body.theme-light #remoteSelBar {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+#remoteSelBar.visible { display: block; }
+
+::highlight(remote-selection) {
+  background-color: rgba(66, 133, 244, 0.35);
+}
+
+.footer { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.hidden { display: none !important; }
+
+/* Share modal — Google Docs style */
+#shareOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.share-modal {
+  background: #fff;
+  color: #1f1f1f;
+  border-radius: 28px;
+  width: 100%;
+  max-width: 512px;
+  padding: 24px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.4);
+}
+
+.share-modal h2 {
+  font-size: 22px;
+  font-weight: 400;
+  margin-bottom: 16px;
+}
+
+.share-email-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+#shareEmail {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid #dadce0;
+  border-radius: 24px;
+  font-size: 14px;
+  outline: none;
+}
+
+#shareEmail:focus {
+  border-color: #1a73e8;
+}
+
+#sendEmailBtn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#sendEmailBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.share-section-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #444;
+  margin-bottom: 12px;
+}
+
+.share-general {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.share-globe {
+  width: 40px;
+  height: 40px;
+  background: #e8f0fe;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.share-general-text { flex: 1; min-width: 0; }
+
+.share-general-text select {
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #1f1f1f;
+  cursor: pointer;
+  width: 100%;
+}
+
+.share-general-text p {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.share-role-select {
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.share-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+#copyLinkBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid #dadce0;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #1a73e8;
+}
+
+#copyLinkBtn:hover { background: #f8f9fa; }
+
+#shareDoneBtn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 999px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+#copyToast {
+  font-size: 12px;
+  color: #137333;
+  margin-top: 8px;
+  min-height: 18px;
+}
+
+@media (max-width: 768px) {
+  .workspace { padding: 20px 16px; }
+  #answer { font-size: 14px; }
+}
+#answer h1, #answer h2, #answer h3 { line-height: 1.3; margin: 1.1em 0 .5em; }
+#answer p { margin: .6em 0; }
+#answer ul, #answer ol { padding-left: 1.6em; margin: .6em 0; }
+#answer li { margin: .25em 0; }
+#answer table { border-collapse: collapse; margin: 1em 0; max-width: 100%; }
+#answer th, #answer td { border: 1px solid #666; padding: .45em .7em; text-align: left; }
+#answer blockquote { border-left: 3px solid #888; padding-left: 1em; margin: .8em 0; }
+#answer a { color: #60a5fa; }
+/* ── Overlay / Practice Mode (Electron always-on-top window) ── */
+html.overlay-mode,
+body.overlay-mode {
+  background: #000 !important;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+body.overlay-mode.overlay-transparent {
+  background: transparent !important;
+}
+
+body.overlay-mode #app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+body.overlay-mode .container {
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.overlay-mode .header {
+  -webkit-app-region: drag;
+  user-select: none;
+  margin-bottom: 0;
+  padding: 4px 2px;
+  flex-shrink: 0;
+}
+
+body.overlay-mode .toolbar,
+body.overlay-mode .toolbar button,
+body.overlay-mode .toolbar .status,
+body.overlay-mode .toolbar #liveBadge,
+body.overlay-mode .toolbar #roleBadge {
+  -webkit-app-region: no-drag;
+}
+
+body.overlay-mode #themeBtn,
+body.overlay-mode #autoCopyBtn,
+body.overlay-mode #accessAdminBtn,
+body.overlay-mode #shareBtn,
+body.overlay-mode #focusBtn,
+body.overlay-mode #focusExit {
+  display: none !important;
+}
+
+body.overlay-mode .workspace {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 22px 26px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+body.overlay-mode.overlay-transparent .workspace {
+  background: rgba(10, 12, 18, 0.38);
+  border-color: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: none;
+}
+
+body.overlay-mode .footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 0;
+  padding: 0 4px;
+}
+
+body.overlay-mode #practiceLabel {
+  display: inline-flex;
+}
+
+#practiceLabel {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  background: rgba(58, 42, 16, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#transparentBtn {
+  display: none;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--btn);
+  color: var(--btn-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.overlay-mode #transparentBtn {
+  display: inline-flex;
+  -webkit-app-region: no-drag;
+}
+
+#transparentBtn.on {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+#overlayHints {
+  display: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+body.overlay-mode #overlayHints {
+  display: block;
+}
+
+body.overlay-mode #winControls {
+  display: inline-flex;
+}
+
+#winControls {
+  display: none;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+#winControls button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--btn);
+  color: var(--btn-text);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#winControls button:hover {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+</style>
+</head>
+<body>
+
+<div id="locked" class="hidden">
+  <h2>You need access</h2>
+  <p>Open your owner link to edit, or <a href="/access">request viewer access</a>.</p>
+</div>
+
+<div id="passwordGate" class="hidden">
+  <h2>Password required</h2>
+  <p>Enter the Live Workspace password to continue.</p>
+  <form id="passwordForm" style="margin-top:16px;display:flex;flex-direction:column;gap:10px;align-items:stretch">
+    <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" style="padding:12px 14px;border-radius:10px;border:1px solid var(--panel-border);background:var(--panel);color:var(--text);font-size:14px;outline:none" />
+    <button id="passwordBtn" type="submit" style="padding:10px 16px;border:none;border-radius:999px;background:#2563eb;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Unlock</button>
+  </form>
+  <p id="passwordError" style="color:#f87171;font-size:13px;margin-top:10px;min-height:18px"></p>
+</div>
+
+<div id="app" class="hidden">
+  <button id="focusExit" type="button">Exit focus</button>
+  <div class="container">
+    <div class="header">
+      <div class="logo">Live Workspace</div>
+      <div class="toolbar">
+        <span id="practiceLabel">Viewer</span>
+        <button id="transparentBtn" type="button">Transparent: OFF</button>
+        <button id="accessAdminBtn" class="hidden" type="button">Viewer access</button>
+        <span id="liveBadge" class="idle">Idle</span>
+        <span id="roleBadge">Editor</span>
+        <button id="themeBtn" type="button" title="Alt+L">Light</button>
+        <button id="focusBtn" type="button" title="Alt+F">Focus</button>
+        <button id="shareBtn" class="hidden">Share</button>
+        <button id="autoCopyBtn">Auto Copy: ON</button>
+        <div id="status" class="status disconnected">Connecting...</div>
+        <div id="winControls"><button id="overlayMinBtn" type="button" title="Minimize">–</button><button id="overlayCloseBtn" type="button" title="Close overlay">×</button></div>
+      </div>
+    </div>
+    <div class="workspace">
+      <div id="remoteSelBar"></div>
+      <div id="answer" contenteditable="true" spellcheck="true"></div>
+    </div>
+    <div class="footer">
+      <span id="overlayHints"></span>Last Updated: <span id="updatedAt">--</span></div>
+  </div>
+</div>
+
+<div id="shareOverlay" class="hidden">
+  <div class="share-modal">
+    <h2>Share "Live Workspace"</h2>
+    <div class="share-email-row">
+      <input id="shareEmail" type="email" placeholder="Add people by email">
+      <button id="sendEmailBtn">Send</button>
+    </div>
+    <div class="share-section-title">General access</div>
+    <div class="share-general">
+      <div class="share-globe">🌐</div>
+      <div class="share-general-text">
+        <select id="accessType">
+          <option value="link">Anyone with the link</option>
+        </select>
+        <p id="accessDesc">Anyone on the internet with the link can view</p>
+      </div>
+      <select id="linkRole" class="share-role-select">
+        <option value="view">Viewer</option>
+        <option value="edit">Editor</option>
+      </select>
+    </div>
+    <div class="share-footer">
+      <button id="copyLinkBtn">🔗 Copy link</button>
+      <button id="shareDoneBtn">Done</button>
+    </div>
+    <div id="copyToast"></div>
+  </div>
+</div>
+
+<script src="/vendor/marked.umd.js"></script>
+<script src="/vendor/purify.min.js"></script>
+<script src="/markdown.js"></script>
+<script>
+const lockedEl = document.getElementById("locked");
+const passwordGateEl = document.getElementById("passwordGate");
+const passwordForm = document.getElementById("passwordForm");
+const passwordInput = document.getElementById("passwordInput");
+const passwordError = document.getElementById("passwordError");
+const accessAdminBtn = document.getElementById("accessAdminBtn");
+const appEl = document.getElementById("app");
+const answerEl = document.getElementById("answer");
+const statusEl = document.getElementById("status");
+const updatedAt = document.getElementById("updatedAt");
+const autoCopyBtn = document.getElementById("autoCopyBtn");
+const roleBadge = document.getElementById("roleBadge");
+const liveBadge = document.getElementById("liveBadge");
+const shareBtn = document.getElementById("shareBtn");
+const focusBtn = document.getElementById("focusBtn");
+const focusExit = document.getElementById("focusExit");
+const themeBtn = document.getElementById("themeBtn");
+const shareOverlay = document.getElementById("shareOverlay");
+const linkRole = document.getElementById("linkRole");
+const accessDesc = document.getElementById("accessDesc");
+const copyToast = document.getElementById("copyToast");
+const remoteSelBar = document.getElementById("remoteSelBar");
+
+// The relay owns this shared setting. A newly opened viewer must not pause
+// everyone's stream by sending a missing or stale browser preference.
+let autoCopy = true;
+let focusMode = localStorage.getItem("lw-focus") === "true";
+let theme = localStorage.getItem("lw-theme") || "dark";
+let userRole = "edit";
+let accessKey = "";
+let gateToken = sessionStorage.getItem("lw-gate") || "";
+let accessStopped = false;
+let reconnectTimer = null;
+let approvalEnabled = true;
+let shareLinks = { viewLink: "", editLink: "" };
+let clientId = "";
+let ws = null;
+let applyingRemote = false;
+let remoteApplyUntil = 0;
+let syncTimer = null;
+let selTimer = null;
+let lastEditSyncTs = 0;
+let lastLocalEditAt = 0;
+let pendingStream = null;
+let streamIdleTimer = null;
+let liveState = "idle";
+const EDIT_GUARD_MS = 2500;
+
+function setAutoCopy(on, fromRemote = false) {
+  autoCopy = on;
+  autoCopyBtn.textContent = `Auto Copy: ${on ? "ON" : "OFF"}`;
+  autoCopyBtn.classList.toggle("on", on);
+
+  if (!fromRemote && userRole === "edit") {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "autoCopy", on }));
+    }
+  }
+}
+
+function getOffsetInContainer(root, node, offset) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let pos = 0;
+  while (walker.nextNode()) {
+    const current = walker.currentNode;
+    if (current === node) return pos + offset;
+    pos += current.textContent.length;
+  }
+  return pos;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatInlineMarkdown(text) {
+  return escapeHtml(text)
+    .replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>')
+    .replace(/\n/g, "<br>");
+}
+
+const LANG_KEYWORDS = {
+  sql: /\b(ADD|ALL|ALTER|AND|ANY|AS|ASC|BETWEEN|BY|CASE|CAST|CHECK|COLUMN|CONSTRAINT|CREATE|CROSS|DATABASE|DECLARE|DEFAULT|DELETE|DENSE_RANK|DESC|DISTINCT|DROP|ELSE|END|EXCEPT|EXISTS|FOREIGN|FROM|FULL|GROUP|HAVING|IN|INDEX|INNER|INSERT|INTERSECT|INTO|IS|JOIN|KEY|LEFT|LIKE|LIMIT|NOT|NULL|ON|OR|ORDER|OUTER|OVER|PARTITION|PRIMARY|PROCEDURE|RANK|REFERENCES|RIGHT|ROW_NUMBER|SELECT|SET|TABLE|THEN|TOP|UNION|UNIQUE|UPDATE|VALUES|VIEW|WHEN|WHERE|WITH|OVER)\b/gi,
+  javascript: /\b(async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|false|finally|for|function|if|import|in|instanceof|let|new|null|of|return|static|super|switch|this|throw|true|try|typeof|undefined|var|void|while|with|yield)\b/g,
+  typescript: /\b(async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|false|finally|for|function|if|implements|import|in|instanceof|interface|let|new|null|of|private|protected|public|return|static|super|switch|this|throw|true|try|type|typeof|undefined|var|void|while|with|yield)\b/g,
+  python: /\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield)\b/g,
+  java: /\b(abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|null|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|true|false|try|void|volatile|while)\b/g,
+  json: /\b(true|false|null)\b/g,
+  bash: /\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|in|select|time|until|export|local|return|exit|echo|cd|ls|pwd|grep|awk|sed)\b/g,
+  shell: /\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|in|select|time|until|export|local|return|exit|echo|cd|ls|pwd|grep|awk|sed)\b/g
+};
+
+function highlightCode(code, lang) {
+  const raw = String(code);
+  const tokens = [];
+  let i = 0;
+
+  const push = (type, value) => {
+    tokens.push({ type, value });
+  };
+
+  const isSql = (lang || "").toLowerCase() === "sql";
+  const lineComment = isSql ? "--" : (lang === "python" ? "#" : "//");
+  const kwRe = LANG_KEYWORDS[(lang || "").toLowerCase()] || LANG_KEYWORDS.sql;
+
+  while (i < raw.length) {
+    if (raw.startsWith("/*", i)) {
+      const end = raw.indexOf("*/", i + 2);
+      const stop = end === -1 ? raw.length : end + 2;
+      push("cm", raw.slice(i, stop));
+      i = stop;
+      continue;
+    }
+
+    if (lineComment && raw.startsWith(lineComment, i)) {
+      let end = raw.indexOf("\n", i);
+      if (end === -1) end = raw.length;
+      push("cm", raw.slice(i, end));
+      i = end;
+      continue;
+    }
+
+    const ch = raw[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      let j = i + 1;
+      while (j < raw.length) {
+        if (raw[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (raw[j] === ch) {
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      push("str", raw.slice(i, j));
+      i = j;
+      continue;
+    }
+
+    if (/[0-9]/.test(ch)) {
+      let j = i + 1;
+      while (j < raw.length && /[0-9._]/.test(raw[j])) j += 1;
+      push("num", raw.slice(i, j));
+      i = j;
+      continue;
+    }
+
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i + 1;
+      while (j < raw.length && /[A-Za-z0-9_]/.test(raw[j])) j += 1;
+      const word = raw.slice(i, j);
+      const nextNonSpace = raw.slice(j).match(/^\s*/)?.[0].length ?? 0;
+      const after = raw[j + nextNonSpace];
+      if (kwRe.test(word)) {
+        kwRe.lastIndex = 0;
+        push("kw", word);
+      } else if (after === "(") {
+        push("fn", word);
+      } else {
+        push("id", word);
+      }
+      i = j;
+      continue;
+    }
+
+    push("id", ch);
+    i += 1;
+  }
+
+  return tokens.map(({ type, value }) => {
+    const safe = escapeHtml(value);
+    if (type === "id") return safe;
+    return `<span class="tok-${type}">${safe}</span>`;
+  }).join("");
+}
+
+function plainTextToHtml(text) {
+  if (typeof marked === "undefined" || typeof DOMPurify === "undefined") return escapeHtml(text).replace(/\n/g, "<br>");
+  const template = document.createElement("template");
+  template.innerHTML = DOMPurify.sanitize(marked.parse(String(text), { gfm: true, breaks: false }), {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ["img", "video", "audio", "iframe", "form", "input", "style"],
+    FORBID_ATTR: ["style"]
+  });
+  template.content.querySelectorAll("pre > code").forEach(code => {
+    const lang = (/language-([\w+-]+)/.exec(code.className) || [])[1] || "";
+    const pre = code.parentElement;
+    const wrap = document.createElement("div");
+    wrap.className = "code-wrap";
+    wrap.contentEditable = "false";
+    const header = document.createElement("div");
+    header.className = "code-header";
+    const label = document.createElement("span");
+    label.className = "code-lang";
+    label.textContent = lang || "code";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "code-copy";
+    button.textContent = "Copy";
+    header.append(label, button);
+    pre.className = "code-block";
+    pre.setAttribute("data-lang", lang);
+    if (lang) code.innerHTML = highlightCode(code.textContent, lang);
+    pre.replaceWith(wrap);
+    wrap.append(header, pre);
+  });
+  template.content.querySelectorAll("a").forEach(a => a.setAttribute("rel", "noopener noreferrer"));
+  template.content.querySelectorAll("code:not(pre code)").forEach(code => code.classList.add("inline-code"));
+  return template.innerHTML;
+}
+
+function htmlToPlainText(root) {
+  let out = "";
+
+  const walk = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent;
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const tag = node.tagName.toLowerCase();
+
+    if (node.classList.contains("code-wrap")) {
+      const pre = node.querySelector(".code-block");
+      const lang = pre?.getAttribute("data-lang") || "";
+      const code = pre?.querySelector("code")?.textContent ?? pre?.textContent ?? "";
+      out += `\n\`\`\`${lang}\n${code.replace(/\n$/, "")}\n\`\`\`\n`;
+      return;
+    }
+
+    if (tag === "pre" && node.classList.contains("code-block")) {
+      const lang = node.getAttribute("data-lang") || "";
+      const code = node.querySelector("code")?.textContent ?? node.textContent;
+      out += `\n\`\`\`${lang}\n${code.replace(/\n$/, "")}\n\`\`\`\n`;
+      return;
+    }
+
+    if (tag === "code" && node.classList.contains("inline-code")) {
+      out += `\`${node.textContent}\``;
+      return;
+    }
+
+    if (tag === "br") {
+      out += "\n";
+      return;
+    }
+
+    if (tag === "div" || tag === "p") {
+      if (out && !out.endsWith("\n")) out += "\n";
+    }
+
+    for (const child of node.childNodes) walk(child);
+
+    if (tag === "div" || tag === "p") {
+      if (!out.endsWith("\n")) out += "\n";
+    }
+  };
+
+  walk(root);
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function setLiveBadge(state, label) {
+  liveState = state;
+  liveBadge.className = state;
+  liveBadge.textContent = label;
+}
+
+function markStreaming() {
+  setLiveBadge("streaming", "Streaming…");
+  clearTimeout(streamIdleTimer);
+  streamIdleTimer = setTimeout(() => {
+    if (!isActivelyEditing()) setLiveBadge("idle", "Idle");
+  }, 900);
+}
+
+function markPausedEditing() {
+  setLiveBadge("paused", "Paused while editing");
+}
+
+function applyTheme(next) {
+  theme = next === "light" ? "light" : "dark";
+  document.body.classList.toggle("theme-light", theme === "light");
+  themeBtn.textContent = theme === "light" ? "Dark" : "Light";
+  localStorage.setItem("lw-theme", theme);
+}
+
+function setFocusMode(on) {
+  focusMode = Boolean(on);
+  document.body.classList.toggle("focus-mode", focusMode);
+  focusBtn.classList.toggle("on", focusMode);
+  focusBtn.textContent = focusMode ? "Focus: ON" : "Focus";
+  localStorage.setItem("lw-focus", focusMode ? "true" : "false");
+}
+
+function copyLastCodeBlock() {
+  const code = answerEl.querySelector(".code-block code")?.textContent;
+  if (!code) return false;
+  navigator.clipboard.writeText(code).catch(() => {});
+  return true;
+}
+
+function getAnswerPlainText() {
+  if (typeof LiveMarkdown !== "undefined") return LiveMarkdown.fromElement(answerEl);
+  if (answerEl.querySelector(".code-block, .code-wrap, .inline-code")) {
+    return htmlToPlainText(answerEl);
+  }
+  return answerEl.innerText;
+}
+
+function canAppendDiff() {
+  // Closing Markdown delimiters can change already rendered text.
+  return false;
+}
+
+function applyRemoteText(text, opts = {}) {
+  const current = getAnswerPlainText();
+  if (current === text) return;
+
+  applyingRemote = true;
+  remoteApplyUntil = Date.now() + 200;
+
+  if (opts.fromStream && canAppendDiff(current, text)) {
+    const suffix = text.slice(current.length);
+    answerEl.insertAdjacentHTML("beforeend", formatInlineMarkdown(suffix));
+  } else {
+    answerEl.innerHTML = plainTextToHtml(text);
+  }
+
+  setTimeout(() => {
+    applyingRemote = false;
+  }, 100);
+  updatedAt.textContent = new Date().toLocaleTimeString();
+  clearRemoteSelection();
+}
+
+function markLocalEdit() {
+  lastLocalEditAt = Date.now();
+  markPausedEditing();
+}
+
+function isActivelyEditing() {
+  if (applyingRemote || Date.now() < remoteApplyUntil) return false;
+  if (document.activeElement === answerEl) return true;
+  return Date.now() - lastLocalEditAt < EDIT_GUARD_MS;
+}
+
+function applyIncomingStream(text, ts) {
+  if (!autoCopy) return;
+
+  if (isActivelyEditing()) {
+    pendingStream = { text, ts };
+    markPausedEditing();
+    return;
+  }
+
+  pendingStream = null;
+  markStreaming();
+  applyRemoteText(text, { fromStream: true });
+}
+
+function flushPendingStream() {
+  if (!pendingStream || !autoCopy) return;
+  if (isActivelyEditing()) return;
+
+  const { text, ts } = pendingStream;
+  pendingStream = null;
+  applyIncomingStream(text, ts);
+}
+
+function isApplyingRemote() {
+  return applyingRemote || Date.now() < remoteApplyUntil;
+}
+
+function sendSync() {
+  if (userRole !== "edit") return;
+
+  const text = getAnswerPlainText();
+  lastEditSyncTs = Date.now();
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "sync", text, ts: lastEditSyncTs }));
+  }
+
+  fetch("/api/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, role: userRole, key: accessKey, gate: gateToken || undefined })
+  }).catch(() => {});
+}
+
+function scheduleSync() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(sendSync, 150);
+}
+
+function getSelectionOffsets() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+
+  const range = sel.getRangeAt(0);
+  if (!answerEl.contains(range.commonAncestorContainer)) return null;
+
+  const start = getOffsetInContainer(answerEl, range.startContainer, range.startOffset);
+  const end = start + range.toString().length;
+
+  return { start, end, text: range.toString() };
+}
+
+function getRangeFromOffsets(start, end) {
+  const range = document.createRange();
+  const walker = document.createTreeWalker(answerEl, NodeFilter.SHOW_TEXT);
+  let pos = 0;
+  let startNode = null;
+  let startOff = 0;
+  let endNode = null;
+  let endOff = 0;
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const len = node.textContent.length;
+    if (!startNode && pos + len >= start) {
+      startNode = node;
+      startOff = start - pos;
+    }
+    if (pos + len >= end) {
+      endNode = node;
+      endOff = end - pos;
+      break;
+    }
+    pos += len;
+  }
+
+  if (!startNode || !endNode) return null;
+  range.setStart(startNode, startOff);
+  range.setEnd(endNode, endOff);
+  return range;
+}
+
+function clearRemoteSelection() {
+  if (CSS.highlights) CSS.highlights.delete("remote-selection");
+  remoteSelBar.classList.remove("visible");
+  remoteSelBar.textContent = "";
+}
+
+function showRemoteSelection(msg) {
+  if (msg.clientId === clientId) return;
+
+  clearRemoteSelection();
+
+  if (msg.start === msg.end) return;
+
+  const range = getRangeFromOffsets(msg.start, msg.end);
+  if (range && CSS.highlights) {
+    CSS.highlights.set("remote-selection", new Highlight(range));
+  }
+
+  const preview = (msg.text || "").trim();
+  if (preview) {
+    const short = preview.length > 80 ? `${preview.slice(0, 80)}…` : preview;
+    remoteSelBar.textContent = `Partner selected: "${short}"`;
+    remoteSelBar.classList.add("visible");
+  }
+}
+
+function sendSelection() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || userRole !== "edit") return;
+
+  const sel = getSelectionOffsets();
+  if (!sel) {
+    ws.send(JSON.stringify({ type: "selection", start: 0, end: 0, text: "" }));
+    return;
+  }
+
+  ws.send(JSON.stringify({
+    type: "selection",
+    start: sel.start,
+    end: sel.end,
+    text: sel.text
+  }));
+}
+
+function scheduleSelection() {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(sendSelection, 100);
+}
+
+function applyRole(role) {
+  userRole = role;
+  roleBadge.textContent = role === "edit" ? "Editor" : "Viewer";
+  shareBtn.classList.toggle("hidden", role !== "edit");
+  accessAdminBtn.classList.toggle("hidden", role !== "edit");
+
+  if (role === "view") {
+    answerEl.contentEditable = "false";
+    answerEl.classList.add("view-only");
+    autoCopyBtn.classList.remove("hidden");
+    autoCopyBtn.disabled = true;
+  } else {
+    answerEl.contentEditable = "true";
+    answerEl.classList.remove("view-only");
+    autoCopyBtn.classList.remove("hidden");
+    autoCopyBtn.disabled = false;
+  }
+  setAutoCopy(autoCopy, true);
+}
+
+function showApp() {
+  accessStopped = false;
+  lockedEl.classList.add("hidden");
+  passwordGateEl.classList.add("hidden");
+  appEl.classList.remove("hidden");
+  initOverlayMode();
+  const overlay = document.body.classList.contains("overlay-mode");
+  applyTheme(overlay ? "dark" : theme);
+  setFocusMode(overlay ? false : focusMode);
+  document.title = "Live Workspace — Ready";
+  connect();
+}
+
+function stopAccess() {
+  accessStopped = true;
+  document.title = "Live Workspace — Access required";
+  clearTimeout(reconnectTimer);
+  clearTimeout(syncTimer);
+  clearTimeout(selTimer);
+  clearTimeout(streamIdleTimer);
+  pendingStream = null;
+  answerEl.replaceChildren();
+  clearRemoteSelection();
+  updatedAt.textContent = "--";
+  appEl.classList.add("hidden");
+  if (ws) {
+    ws.onclose = null;
+    ws.onmessage = null;
+    try { ws.close(); } catch {}
+    ws = null;
+  }
+}
+
+function requireApproval() {
+  stopAccess();
+  const overlay = new URLSearchParams(location.search).get("overlay") === "1";
+  location.replace(overlay ? "/access?overlay=1" : "/access");
+}
+
+async function tryAuth(role, key) {
+  const params = new URLSearchParams({ role, key });
+  if (gateToken) params.set("gate", gateToken);
+  const response = await fetch(`/auth?${params}`, { cache: "no-store", credentials: "same-origin" });
+  if (response.status >= 500) throw new Error("Workspace is temporarily unavailable. Please reload to try again.");
+  return response.json();
+}
+
+async function initAccess(reconnecting = false) {
+  const params = new URLSearchParams(location.search);
+  const isOverlay = params.get("overlay") === "1" || Boolean(window.overlayAPI && window.overlayAPI.isOverlay);
+  const requestedRole = isOverlay || params.get("role") === "view" ? "view"
+    : params.get("role") === "edit" ? "edit" : sessionStorage.getItem("lw-role") || "edit";
+  const key = params.get("key") || sessionStorage.getItem("lw-key") || "";
+  const urlGate = params.get("gate");
+  if (urlGate) { gateToken = urlGate; sessionStorage.setItem("lw-gate", gateToken); }
+  try {
+    const auth = await tryAuth(requestedRole, key);
+    if (auth.passwordRequired) {
+      stopAccess();
+      gateToken = "";
+      sessionStorage.removeItem("lw-gate");
+      lockedEl.classList.add("hidden");
+      passwordGateEl.classList.remove("hidden");
+      return;
+    }
+    if (auth.approvalRequired) { requireApproval(); return; }
+    if (auth.ok) {
+      accessKey = key;
+      approvalEnabled = auth.approvalEnabled !== false;
+      sessionStorage.setItem("lw-role", auth.role || requestedRole);
+      if (key) sessionStorage.setItem("lw-key", key);
+      applyRole(auth.role || requestedRole);
+      showApp();
+      return;
+    }
+    stopAccess();
+    lockedEl.classList.remove("hidden");
+  } catch (error) {
+    if (reconnecting && !accessStopped) {
+      statusEl.textContent = "Reconnecting…";
+      statusEl.className = "status disconnected";
+      reconnectTimer = setTimeout(() => initAccess(true), 3000);
+      return;
+    }
+    stopAccess();
+    lockedEl.classList.remove("hidden");
+    lockedEl.querySelector("p").textContent = "Could not connect to the workspace. Reload this page to try again.";
+  }
+}
+
+passwordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = document.getElementById("passwordBtn");
+  button.disabled = true;
+  passwordError.textContent = "";
+  try {
+    const response = await fetch("/api/unlock", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: passwordInput.value })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not unlock. Check the password.");
+    gateToken = data.token || "";
+    if (gateToken) sessionStorage.setItem("lw-gate", gateToken);
+    passwordInput.value = "";
+    await initAccess();
+  } catch (error) { passwordError.textContent = error.message || "Could not unlock."; }
+  finally { button.disabled = false; }
+});
+
+accessAdminBtn.addEventListener("click", () => { location.href = "/access-admin"; });
+
+function updateAccessDesc() {
+  const role = linkRole.value;
+  accessDesc.textContent =
+    role === "edit"
+      ? "Anyone on the internet with the link can edit"
+      : approvalEnabled ? "Viewers must request your approval" : "Anyone with the viewer link can view";
+}
+
+function getSelectedLink() {
+  return linkRole.value === "edit" ? shareLinks.editLink : shareLinks.viewLink;
+}
+
+async function openShareModal() {
+  copyToast.textContent = "";
+  const res = await fetch(
+    `/api/share-links?role=${encodeURIComponent(userRole)}&key=${encodeURIComponent(accessKey)}&gate=${encodeURIComponent(gateToken)}`
+  );
+  if (res.ok) {
+    shareLinks = await res.json();
+  } else {
+    shareLinks = {
+      viewLink: `${location.origin}/access`,
+      editLink: ""
+    };
+  }
+  if (approvalEnabled) shareLinks.viewLink = `${location.origin}/access`;
+  linkRole.value = "view";
+  updateAccessDesc();
+  shareOverlay.classList.remove("hidden");
+}
+
+shareBtn.addEventListener("click", openShareModal);
+linkRole.addEventListener("change", updateAccessDesc);
+
+document.getElementById("copyLinkBtn").addEventListener("click", async () => {
+  const link = getSelectedLink();
+  await navigator.clipboard.writeText(link);
+  copyToast.textContent = "Link copied to clipboard";
+});
+
+document.getElementById("sendEmailBtn").addEventListener("click", async () => {
+  const email = document.getElementById("shareEmail").value.trim();
+  const btn = document.getElementById("sendEmailBtn");
+
+  if (!email) {
+    copyToast.textContent = "Enter an email address";
+    return;
+  }
+
+  btn.disabled = true;
+  copyToast.textContent = "Sending...";
+
+  try {
+    const res = await fetch("/api/send-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        linkRole: linkRole.value,
+        role: userRole,
+        key: accessKey,
+        gate: gateToken || undefined
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      copyToast.textContent = `Invite sent to ${email}`;
+      document.getElementById("shareEmail").value = "";
+    } else if (data.mailto) {
+      window.location.href = data.mailto;
+      copyToast.textContent = "Opening your email app...";
+    } else {
+      copyToast.textContent = data.error || "Could not send email";
+    }
+  } catch {
+    copyToast.textContent = "Could not send email";
+  }
+
+  btn.disabled = false;
+});
+
+document.getElementById("shareDoneBtn").addEventListener("click", () => {
+  shareOverlay.classList.add("hidden");
+});
+
+shareOverlay.addEventListener("click", (e) => {
+  if (e.target === shareOverlay) shareOverlay.classList.add("hidden");
+});
+
+autoCopyBtn.addEventListener("click", () => setAutoCopy(!autoCopy));
+
+themeBtn.addEventListener("click", () => {
+  applyTheme(theme === "light" ? "dark" : "light");
+});
+
+focusBtn.addEventListener("click", () => setFocusMode(!focusMode));
+focusExit.addEventListener("click", () => setFocusMode(false));
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && focusMode) {
+    setFocusMode(false);
+    return;
+  }
+
+  if (!event.altKey) return;
+
+  if (event.key === "f" || event.key === "F") {
+    event.preventDefault();
+    setFocusMode(!focusMode);
+  } else if (event.key === "l" || event.key === "L") {
+    event.preventDefault();
+    applyTheme(theme === "light" ? "dark" : "light");
+  } else if (event.key === "c" || event.key === "C") {
+    event.preventDefault();
+    copyLastCodeBlock();
+  }
+});
+
+answerEl.addEventListener("click", async (event) => {
+  const btn = event.target.closest(".code-copy");
+  if (!btn || !answerEl.contains(btn)) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const wrap = btn.closest(".code-wrap");
+  const code = wrap?.querySelector(".code-block code")?.textContent || "";
+
+  try {
+    await navigator.clipboard.writeText(code);
+    btn.textContent = "Copied";
+    btn.classList.add("copied");
+    setTimeout(() => {
+      btn.textContent = "Copy";
+      btn.classList.remove("copied");
+    }, 1500);
+  } catch {
+    btn.textContent = "Failed";
+    setTimeout(() => {
+      btn.textContent = "Copy";
+    }, 1500);
+  }
+});
+
+function onLocalEdit() {
+  if (isApplyingRemote() || userRole !== "edit") return;
+  markLocalEdit();
+  scheduleSync();
+}
+
+answerEl.addEventListener("input", onLocalEdit);
+answerEl.addEventListener("beforeinput", onLocalEdit);
+answerEl.addEventListener("keyup", onLocalEdit);
+answerEl.addEventListener("paste", onLocalEdit);
+answerEl.addEventListener("cut", onLocalEdit);
+
+answerEl.addEventListener("blur", () => {
+  setTimeout(flushPendingStream, 150);
+});
+
+setInterval(flushPendingStream, 500);
+
+document.addEventListener("selectionchange", () => {
+  if (userRole !== "edit") return;
+  scheduleSelection();
+});
+
+function connect() {
+  if (accessStopped) return;
+  clearTimeout(reconnectTimer);
+  if (ws) {
+    ws.onclose = null;
+    ws.onmessage = null;
+    try { ws.close(); } catch {}
+  }
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const qs = `role=${encodeURIComponent(userRole)}&key=${encodeURIComponent(accessKey)}&gate=${encodeURIComponent(gateToken)}`;
+  ws = new WebSocket(`${wsProtocol}//${location.host}?${qs}`);
+
+  ws.onopen = () => {
+    statusEl.textContent = "Connected";
+    statusEl.className = "status connected";
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "access-revoked" || msg.approvalRequired) { requireApproval(); return; }
+
+      if (msg.type === "auth") {
+        clientId = msg.clientId || "";
+        applyRole(msg.role);
+      }
+
+      if (msg.type === "autoCopy" && typeof msg.on === "boolean") {
+        setAutoCopy(msg.on, true);
+      }
+
+      if (msg.type === "sync" && typeof msg.text === "string") {
+        if (msg.clientId === clientId) return;
+
+        if (msg.from === "edit" || msg.from === "server") {
+          if (isActivelyEditing()) {
+            markPausedEditing();
+            return;
+          }
+          lastEditSyncTs = msg.ts || Date.now();
+          setLiveBadge("idle", "Idle");
+          applyRemoteText(msg.text, { fromStream: false });
+        } else if (msg.from === "stream") {
+          applyIncomingStream(msg.text, msg.ts);
+        } else {
+          if (isActivelyEditing()) {
+            markPausedEditing();
+            return;
+          }
+          lastEditSyncTs = msg.ts || Date.now();
+          applyRemoteText(msg.text, { fromStream: false });
+        }
+      }
+
+      if (msg.type === "selection") {
+        showRemoteSelection(msg);
+      }
+    } catch {}
+  };
+
+  ws.onclose = (event) => {
+    if (accessStopped) return;
+    if ([1008, 4001, 4003].includes(event.code)) {
+      // Recheck after clearing: viewer approval or an owner's password can expire.
+      stopAccess();
+      initAccess();
+      return;
+    }
+    statusEl.textContent = "Reconnecting…";
+    statusEl.className = "status disconnected";
+    reconnectTimer = setTimeout(() => initAccess(true), 2000);
+  };
+}
+
+function initOverlayMode() {
+  const params = new URLSearchParams(location.search);
+  const isOverlay =
+    params.get("overlay") === "1" ||
+    Boolean(window.overlayAPI && window.overlayAPI.isOverlay);
+
+  if (!isOverlay || document.body.classList.contains("overlay-mode")) return;
+
+  document.documentElement.classList.add("overlay-mode");
+  document.body.classList.add("overlay-mode");
+  applyTheme("dark");
+
+  const transparentBtn = document.getElementById("transparentBtn");
+  const overlayMinBtn = document.getElementById("overlayMinBtn");
+  const overlayCloseBtn = document.getElementById("overlayCloseBtn");
+  const overlayHints = document.getElementById("overlayHints");
+  const isElectron = Boolean(window.overlayAPI && window.overlayAPI.isOverlay);
+
+  let transparent = localStorage.getItem("lw-overlay-transparent") === "true";
+
+  function applyTransparent(on) {
+    transparent = Boolean(on);
+    document.body.classList.toggle("overlay-transparent", transparent);
+    transparentBtn.textContent = `Transparent: ${transparent ? "ON" : "OFF"}`;
+    transparentBtn.classList.toggle("on", transparent);
+    localStorage.setItem("lw-overlay-transparent", transparent ? "true" : "false");
+
+    if (isElectron && typeof window.overlayAPI.setOpacity === "function") {
+      window.overlayAPI.setOpacity(transparent ? 0.75 : 1).catch(() => {});
+    }
+
+    if (overlayHints) {
+      overlayHints.textContent = isElectron
+        ? (transparent
+          ? "Transparent window — drag header to move · apps behind should show through"
+          : "Solid window — turn Transparent ON to see apps behind")
+        : "In Chrome this only lightens the panel. For real see-through, run desktop-overlay.";
+    }
+  }
+
+  applyTransparent(transparent);
+
+  transparentBtn.title = isElectron
+    ? "See through to apps behind this window"
+    : "Real transparency only works in the Electron desktop overlay app";
+
+  transparentBtn.addEventListener("click", () => {
+    applyTransparent(!transparent);
+  });
+
+  if (!isElectron) {
+    // Min/close are Electron-only window controls
+    if (overlayMinBtn) overlayMinBtn.style.display = "none";
+    if (overlayCloseBtn) overlayCloseBtn.style.display = "none";
+  }
+
+  overlayMinBtn.addEventListener("click", () => {
+    if (window.overlayAPI) window.overlayAPI.minimize();
+  });
+
+  overlayCloseBtn.addEventListener("click", () => {
+    if (window.overlayAPI) window.overlayAPI.close();
+  });
+}
+
+initAccess();
+applyTheme(theme);
+</script>
+</body>
+</html>

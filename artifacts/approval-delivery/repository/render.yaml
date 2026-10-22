@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: live-workspace
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: STREAM_KEY
+        sync: false
+      - key: EDIT_KEY
+        sync: false
+      - key: VIEW_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: APP_ORIGIN
+        sync: false
+      - key: VIEWER_APPROVAL_REQUIRED
+        value: "true"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

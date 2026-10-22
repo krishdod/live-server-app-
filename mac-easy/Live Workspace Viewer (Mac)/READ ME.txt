@@ -1,0 +1,8 @@
+Use Terminal — not double-click.
+
+Full steps: open HOW TO OPEN ON MAC.txt (same folder or parent folder).
+
+Working commands (run inside this folder):
+  xattr -cr .
+  chmod +x "Open Viewer.command"
+  bash "Open Viewer.command"

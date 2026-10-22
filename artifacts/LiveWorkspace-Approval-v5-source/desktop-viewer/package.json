@@ -1,0 +1,47 @@
+{
+  "name": "live-workspace-private-viewer",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Desktop viewer with capture exclusion for Live Workspace (Windows and macOS)",
+  "author": "Live Workspace",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "test:smoke": "electron smoke-test.js",
+    "test:approval-smoke": "electron approval-smoke-test.js",
+    "pack": "electron-builder --win dir",
+    "dist": "electron-builder --win portable",
+    "pack:mac": "electron-builder --mac dir",
+    "dist:mac": "electron-builder --mac dmg zip",
+    "dist:all": "electron-builder --win portable --mac dmg zip"
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.liveworkspace.privateviewer",
+    "productName": "Live Workspace Viewer",
+    "directories": { "output": "dist-v5" },
+    "files": ["main.js", "policy.js", "preload.js", "home.html", "home.js", "home.css", "package.json"],
+    "win": {
+      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "signAndEditExecutable": false
+    },
+    "portable": { "artifactName": "LiveWorkspaceViewer-${version}-portable.exe" },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
+    "dmg": {
+      "artifactName": "LiveWorkspaceViewer-${version}-${arch}.dmg"
+    }
+  }
+}

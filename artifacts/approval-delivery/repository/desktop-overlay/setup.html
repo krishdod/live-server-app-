@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Workspace Overlay — Setup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #0b0d12;
+      color: #e8eaed;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: #141820;
+      border: 1px solid #243041;
+      border-radius: 16px;
+      padding: 28px;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    p { color: #9aa3af; font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #0b0d12;
+      color: #e8eaed;
+      font-size: 13px;
+      outline: none;
+    }
+    input:focus { border-color: #60a5fa; }
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.45;
+      word-break: break-all;
+    }
+    .actions { margin-top: 20px; display: flex; gap: 10px; }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #saveBtn { background: #2563eb; color: #fff; }
+    #saveBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #error { margin-top: 12px; color: #f87171; font-size: 13px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Live Workspace Overlay</h1>
+    <p>Paste the viewer link your teammate shared. Viewer-only access does not need the app password.</p>
+    <label for="url">Viewer URL</label>
+    <input id="url" type="url" placeholder="https://your-app.onrender.com/?overlay=1&role=view&key=..." autocomplete="off" />
+    <div class="hint">
+      Use a link with <code>role=view</code> and your view key. Do not put secrets into GitHub or shared screenshots.
+    </div>
+    <div class="actions">
+      <button id="saveBtn" type="button">Open Overlay</button>
+    </div>
+    <div id="error"></div>
+  </div>
+  <script>
+    const urlEl = document.getElementById("url");
+    const saveBtn = document.getElementById("saveBtn");
+    const errorEl = document.getElementById("error");
+
+    window.overlaySetup.getSavedUrl().then((url) => {
+      if (url) urlEl.value = url;
+    }).catch(() => {});
+
+    saveBtn.addEventListener("click", async () => {
+      const url = urlEl.value.trim();
+      errorEl.textContent = "";
+      if (!/^https?:\/\//i.test(url)) {
+        errorEl.textContent = "Enter a full http(s) URL.";
+        return;
+      }
+      saveBtn.disabled = true;
+      try {
+        await window.overlaySetup.unlockAndOpen({ url });
+      } catch (err) {
+        errorEl.textContent = err?.message || "Could not open";
+        saveBtn.disabled = false;
+      }
+    });
+
+    urlEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveBtn.click();
+    });
+  </script>
+</body>
+</html>

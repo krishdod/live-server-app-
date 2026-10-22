@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
+  <title>Live Workspace — Viewer access</title>
+  <link rel="stylesheet" href="/access.css">
+  <script src="/access-admin.js" defer></script>
+</head>
+<body>
+  <main class="card admin-page">
+    <p class="eyebrow">LIVE WORKSPACE · OWNER</p>
+    <h1>Viewer access</h1>
+    <p>Users need your approval before they can see your stream. Ask them for their request code and match it here before approving.</p>
+    <form id="ownerForm" hidden>
+      <label for="ownerKey">Owner access key</label>
+      <input id="ownerKey" type="password" autocomplete="off" required>
+      <label for="ownerPassword">Workspace password <span class="muted">(if configured)</span></label>
+      <input id="ownerPassword" type="password" autocomplete="current-password">
+      <button id="ownerLoginBtn" type="submit">Open access dashboard</button>
+    </form>
+    <div id="dashboard" hidden>
+      <div class="toolbar">
+        <button id="copyViewerLink" type="button">Copy viewer link</button>
+        <button id="refreshBtn" class="secondary" type="button">Refresh</button>
+        <a class="button-link secondary" href="/?role=edit">Back to workspace</a>
+        <button id="ownerSignOut" class="secondary" type="button">Sign out here</button>
+      </div>
+      <p class="muted">Approvals last 1 hour or 24 hours from approval. Revoke ends that viewer’s access immediately. Requests and approvals reset if the server restarts.</p>
+      <p id="emptyState" hidden>No requests yet. Share the viewer link with someone to get started.</p>
+      <div id="requests" class="request-list"></div>
+    </div>
+    <p id="notice" class="notice" role="status" aria-live="polite">Checking owner access…</p>
+  </main>
+</body>
+</html>

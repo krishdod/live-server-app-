@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Live Workspace Viewer</title>
+  <link rel="stylesheet" href="home.css">
+  <script src="home.js" defer></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="heading-row">
+      <h1>Live Workspace <span>Viewer</span></h1>
+      <span id="protection" class="protection pending" role="status">Checking protection…</span>
+    </div>
+
+    <form id="open-form" class="address-row" autocomplete="off">
+      <label for="viewer-url" class="sr-only">Viewer link</label>
+      <input id="viewer-url" type="url" inputmode="url" value="https://live-workspace.onrender.com/?role=view&key=9d149b14f26bab6ed69de844e9502f2a" placeholder="Paste your viewer link" spellcheck="false" autocomplete="off" required>
+      <button id="open-button" class="primary" type="submit">Open</button>
+    </form>
+
+    <div class="controls-row">
+      <div class="control-group">
+        <label class="pin-control" title="Keep this window above other apps (Ctrl+Alt+T)">
+          <input id="pin" type="checkbox" checked> Always on Top
+        </label>
+        <label class="pin-control" title="Click apps behind this window (Ctrl+Alt+C)">
+          <input id="click-through" type="checkbox"> Click-through
+        </label>
+        <div class="opacity-control" title="Window opacity">
+          <button id="opacity-down" type="button" title="Decrease opacity (Ctrl+Alt+-)">−</button>
+          <span id="opacity-label">100%</span>
+          <button id="opacity-up" type="button" title="Increase opacity (Ctrl+Alt+=)">+</button>
+        </div>
+      </div>
+      <div class="window-actions">
+        <button id="change-link" type="button" hidden title="Show the address box again">Link</button>
+        <button id="reload" type="button" title="Reload the viewer">Reload</button>
+        <button id="hide" type="button" disabled title="Waiting for keyboard shortcut">Hide</button>
+        <button id="close" type="button" title="Close this app">Close</button>
+      </div>
+    </div>
+
+    <div class="hint-row">
+      <span id="status-message" role="status">Open the link to connect. The window hides automatically.</span>
+      <span id="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> · <kbd>T</kbd> pin · <kbd>C</kbd> click-through · <kbd>=</kbd>/<kbd>-</kbd> opacity</span>
+    </div>
+  </header>
+
+  <main class="welcome">
+    <div class="welcome-content">
+      <div class="eyebrow">YOUR LIVE PAGE, IN ITS OWN WINDOW</div>
+      <h2>Open your answer page here.</h2>
+      <p>Your viewer link is ready above. Choose Open — the link bar disappears, the window can hide, and click-through lets you use the meeting behind it.</p>
+      <ol>
+        <li><span>1</span><div>Open once at the start. The link section then hides and the toolbar shrinks.</div></li>
+        <li><span>2</span><div>Keep Always on Top on. With Click-through on, clicks go to apps behind; hover the toolbar to use controls.</div></li>
+        <li><span>3</span><div>Use opacity and Ctrl+Alt+V as needed, and test capture protection with your meeting app.</div></li>
+      </ol>
+      <div class="privacy-note">
+        <strong>Protection has limits.</strong>
+        <p>This window requests exclusion from compatible screen captures. Other apps are unaffected, and this app remains visible in Task Manager. Some capture methods may still show its contents.</p>
+      </div>
+      <p class="local-note">Your viewer link is kept only for this session. Nothing connects until you choose Open.</p>
+      <p id="open-error" class="error" role="alert" hidden></p>
+    </div>
+  </main>
+</body>
+</html>

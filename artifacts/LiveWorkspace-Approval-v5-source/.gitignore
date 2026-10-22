@@ -1,0 +1,13 @@
+node_modules/
+.env
+config.js
+desktop-overlay/dist/
+desktop-overlay/overlay-config.json
+
+desktop-viewer/dist*/
+desktop-viewer/node_modules/
+desktop-viewer/smoke-result.json
+artifacts/approval-baseline/
+artifacts/approval-checks/
+artifacts/approval-delivery/
+
