@@ -6,10 +6,12 @@ const path = require('node:path');
 const { normalizeViewerUrl, allowedNavigation, isReadyViewer, supportsCaptureExclusion } = require('../policy');
 const { createViewer } = require('../main');
 
-function harness({ protection = true, shortcut = true, platform = 'win32', release = '10.0.26100' } = {}) {
+function harness({ protection = true, shortcut = true, toolbarShortcut = shortcut, platform = 'win32', release = '10.0.26100' } = {}) {
   const events = [], handlers = new Map();
   class Contents extends EventEmitter {
-    constructor() { super(); this.mainFrame = { url: '' }; this.dead = false; }
+    constructor() { super(); this.mainFrame = { url: '' }; this.dead = false; this.styles = new Map(); this.styleCount = 0; }
+    async insertCSS(css) { const key = String(++this.styleCount); this.styles.set(key, css); return key; }
+    async removeInsertedCSS(key) { this.styles.delete(key); }
     setWindowOpenHandler(fn) { this.popup = fn; }
     async loadURL(url) {
       this.navigate(url);
@@ -29,6 +31,7 @@ function harness({ protection = true, shortcut = true, platform = 'win32', relea
     getTitle() { return this.title || ''; }
     getURL() { return this.url || ''; }
     send() {}
+    focus() {}
     isDestroyed() { return this.dead; }
     close() { this.dead = true; }
   }
@@ -44,6 +47,7 @@ function harness({ protection = true, shortcut = true, platform = 'win32', relea
     setSkipTaskbar(value) { this.skipTaskbar = value; }
     setAlwaysOnTop(value) { this.pinned = value; }
     setOpacity(value) { this.opacity = value; }
+    setBackgroundColor(value) { this.backgroundColor = value; }
     setIgnoreMouseEvents(ignore, options) {
       this.ignoreMouse = ignore;
       this.ignoreMouseOptions = options || null;
@@ -62,6 +66,7 @@ function harness({ protection = true, shortcut = true, platform = 'win32', relea
   class View {
     constructor(options) { this.options = options; this.webContents = new Contents(); }
     setBounds(bounds) { this.bounds = bounds; }
+    setBackgroundColor(value) { this.backgroundColor = value; }
   }
   const ses = new EventEmitter();
   ses.setPermissionRequestHandler = fn => { ses.requestPermission = fn; };
@@ -75,6 +80,10 @@ function harness({ protection = true, shortcut = true, platform = 'win32', relea
       if (key === 'Control+Alt+=') shortcuts.opacityUp = fn;
       if (key === 'Control+Alt+-') shortcuts.opacityDown = fn;
       if (key === 'Control+Alt+C') shortcuts.clickThrough = fn;
+      if (key === 'Control+Alt+B') {
+        shortcuts.toolbar = fn;
+        return toolbarShortcut;
+      }
       return shortcut;
     },
     unregister(key) { shortcuts.handlers.delete(key); }
@@ -208,14 +217,14 @@ test('only the current viewer origin may write plain clipboard content; reads st
 test('hide shortcut remains registered while hidden and second invocation restores', () => {
   const c = harness();
   c.window.emit('ready-to-show');
-  assert.equal(c.window.skipTaskbar, true);
+  assert.equal(c.window.skipTaskbar, false);
   c.shortcuts.toggle();
   assert.equal(c.window.visible, false);
   c.shortcuts.toggle();
   assert.equal(c.window.visible, true);
 });
 
-test('opening a viewer link hides the window when the show/hide shortcut works', async () => {
+test('approval keeps the viewer visible, on the taskbar, and clickable by default', async () => {
   const c = harness();
   c.window.emit('ready-to-show');
   assert.equal(c.window.visible, true);
@@ -223,19 +232,25 @@ test('opening a viewer link hides the window when the show/hide shortcut works',
   assert.equal(opened.ok, true);
   assert.equal(opened.linkHidden, true);
   assert.equal(c.snapshot().linkHidden, true);
-  assert.equal(c.getHeaderHeight(), 128);
-  assert.equal(c.getView().bounds.y, 128);
-  assert.equal(c.snapshot().clickThrough, true);
-  assert.equal(c.window.visible, false);
-  assert.match(c.snapshot().message, /hidden/i);
-  c.shortcuts.toggle();
+  assert.equal(c.snapshot().toolbarHidden, true);
+  assert.equal(c.getHeaderHeight(), 44);
+  assert.deepEqual(c.getView().bounds, { x: 0, y: 44, width: 880, height: 636 });
+  assert.equal(c.snapshot().clickThrough, false);
+  assert.equal(c.window.ignoreMouse, false);
+  assert.equal(c.window.skipTaskbar, false);
+  assert.match(c.snapshot().message, /approved/i);
   assert.equal(c.window.visible, true);
 });
 
 test('click-through passes mouse to apps behind unless the pointer is over the toolbar', async () => {
   const c = harness();
   await c.openViewer('https://example.com/?role=view&key=test');
+  assert.equal(c.snapshot().clickThrough, false);
+  c.shortcuts.clickThrough();
   assert.equal(c.snapshot().clickThrough, true);
+  c.setPointerOverToolbar(true);
+  assert.equal(c.window.ignoreMouse, false, 'collapsed strip stays clickable');
+  c.shortcuts.toolbar();
   c.setPointerOverToolbar(false);
   assert.equal(c.window.ignoreMouse, true);
   assert.deepEqual(c.window.ignoreMouseOptions, { forward: true });
@@ -244,6 +259,38 @@ test('click-through passes mouse to apps behind unless the pointer is over the t
   c.shortcuts.clickThrough();
   assert.equal(c.snapshot().clickThrough, false);
   assert.equal(c.window.ignoreMouse, false);
+});
+
+test('controls shortcut restores the panel and can hide it again without reconnecting', async () => {
+  const c = harness();
+  await c.openViewer('https://example.com/?role=view');
+  const view = c.getView();
+  c.shortcuts.toolbar();
+  assert.equal(c.window.visible, true);
+  assert.equal(c.snapshot().toolbarHidden, false);
+  assert.equal(c.getHeaderHeight(), 128);
+  assert.equal(view.bounds.y, 128);
+  assert.equal(c.window.ignoreMouse, false);
+  c.setLinkBarVisible(true);
+  assert.equal(view.bounds.y, 176);
+  c.shortcuts.toolbar();
+  assert.equal(c.snapshot().toolbarHidden, true);
+  assert.equal(view.bounds.y, 44);
+  assert.equal(view.bounds.height, 636);
+  assert.equal(c.getView(), view, 'toggling controls preserves the approved renderer');
+  assert.equal(c.events.filter(e => e[0] === 'load').length, 1);
+});
+
+test('controls stay recoverable when the controls shortcut cannot register', async () => {
+  const c = harness({ toolbarShortcut: false });
+  await c.openViewer('https://example.com/?role=view');
+  assert.equal(c.snapshot().toolbarShortcut, false);
+  assert.equal(c.snapshot().toolbarHidden, true);
+  assert.equal(c.getHeaderHeight(), 44);
+  c.setToolbarVisible(true);
+  assert.equal(c.snapshot().toolbarHidden, false, 'visible Controls button can still expand settings');
+  c.setToolbarVisible(false);
+  assert.equal(c.snapshot().toolbarHidden, true);
 });
 
 test('always on top pin shortcut toggles the pinned state', () => {
@@ -257,20 +304,49 @@ test('always on top pin shortcut toggles the pinned state', () => {
   assert.equal(c.snapshot().pinned, true);
 });
 
-test('opacity shortcuts increase and decrease window opacity within bounds', async () => {
+test('opacity shortcuts change only the background and never fade foreground text', async () => {
   const c = harness();
   await c.openViewer('https://example.com/?role=view');
-  assert.equal(c.snapshot().opacity, 1);
+  assert.equal(c.snapshot().opacity, 0.75);
   assert.equal(c.window.opacity, 1);
+  assert.equal(c.window.options.transparent, true);
+  assert.equal(c.window.options.frame, false);
+  assert.equal(c.window.backgroundColor, '#00000000');
+  assert.equal(c.getView().backgroundColor, '#00000000');
   c.shortcuts.opacityDown();
-  assert.equal(c.getOpacity(), 0.95);
-  assert.equal(c.window.opacity, 0.95);
+  assert.equal(c.getOpacity(), 0.7);
+  assert.equal(c.window.opacity, 1);
+  await new Promise(setImmediate);
+  const styles = [...c.getView().webContents.styles.values()];
+  assert.equal(styles.length, 1, 'rapid updates retain only the latest stylesheet');
+  assert.match(styles[0], /rgba\(24, 26, 30, 0\.7\)/);
   c.shortcuts.opacityUp();
+  assert.equal(c.getOpacity(), 0.75);
+  for (let i = 0; i < 30; i++) c.shortcuts.opacityUp();
   assert.equal(c.getOpacity(), 1);
   for (let i = 0; i < 30; i++) c.shortcuts.opacityDown();
   assert.equal(c.getOpacity(), 0.2);
   c.shortcuts.opacityUp();
   assert.equal(c.getOpacity(), 0.25);
+  assert.equal(c.window.opacity, 1);
+});
+
+test('approval and revoked pages stay solid and stale glass updates cannot recolor them', async () => {
+  const c = harness();
+  await c.openViewer('https://example.com/access');
+  assert.equal(c.window.backgroundColor, '#10151d');
+  assert.equal(c.getView().backgroundColor, '#10151d');
+  assert.equal(c.getView().webContents.styles.size, 0);
+  const wc = c.getView().webContents;
+  wc.navigate('https://example.com/?role=view');
+  wc.setPageTitle('Live Workspace — Ready');
+  c.adjustOpacity(-0.1);
+  wc.setPageTitle('Live Workspace — Access required');
+  await new Promise(setImmediate);
+  assert.equal(c.window.backgroundColor, '#10151d');
+  assert.equal(c.getView().backgroundColor, '#10151d');
+  assert.equal(wc.styles.size, 0);
+  assert.equal(c.window.opacity, 1);
 });
 
 test('approval and admin pages stay visible, opaque and clickable until authorized viewer is ready', async () => {
@@ -283,6 +359,8 @@ test('approval and admin pages stay visible, opaque and clickable until authoriz
     assert.equal(c.window.visible, true);
     assert.equal(c.window.opacity, 1);
     assert.equal(c.snapshot().clickThrough, false);
+    c.setToolbarVisible(false);
+    assert.equal(c.snapshot().toolbarHidden, false, 'approval forms retain controls');
     c.setClickThrough(true);
     c.setPointerOverToolbar(false);
     c.adjustOpacity(-0.5);
@@ -296,9 +374,9 @@ test('approval and admin pages stay visible, opaque and clickable until authoriz
   assert.equal(c.snapshot().interactivePage, true);
   wc.setPageTitle('Live Workspace — Ready');
   assert.equal(c.snapshot().interactivePage, false);
-  assert.equal(c.snapshot().clickThrough, true);
+  assert.equal(c.snapshot().clickThrough, false);
   assert.equal(c.snapshot().linkHidden, true);
-  assert.equal(c.window.visible, false);
+  assert.equal(c.window.visible, true);
 });
 
 test('revocation restores interactive mode and preserves overlay preferences after reapproval', async () => {
@@ -312,13 +390,18 @@ test('revocation restores interactive mode and preserves overlay preferences aft
   assert.equal(c.window.opacity, 1);
   assert.equal(c.window.ignoreMouse, false);
   assert.equal(c.snapshot().clickThrough, false);
+  assert.equal(c.snapshot().toolbarHidden, false);
+  assert.equal(c.getView().bounds.y, 128);
   wc.navigate('https://example.com/access');
   wc.setPageTitle('Live Workspace — Ready');
   assert.equal(c.snapshot().interactivePage, true, 'ready title cannot turn an approval page into an overlay');
   wc.navigate('https://example.com/?role=view');
   wc.setPageTitle('Live Workspace — Ready');
-  assert.equal(c.window.opacity, 0.65);
+  assert.equal(c.getOpacity(), 0.4);
+  assert.equal(c.window.opacity, 1, 'reapproval restores surface alpha without fading text');
   assert.equal(c.snapshot().clickThrough, false, 'preserve manually disabled click-through');
+  assert.equal(c.snapshot().toolbarHidden, true);
+  assert.equal(c.getView().bounds.y, 44);
   assert.equal(c.window.visible, true, 'reapproval does not unexpectedly hide the window again');
 });
 
@@ -353,4 +436,5 @@ test('reopening a viewer disposes its previous renderer; closing disposes the fi
   c.window.close();
   assert.equal(last.isDestroyed(), true);
   assert.equal(c.handlers.size, 0);
+  assert.equal(c.shortcuts.handlers.has('Control+Alt+B'), false);
 });

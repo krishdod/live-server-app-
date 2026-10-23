@@ -1,0 +1,38 @@
+/* Desktop-only overrides. Alpha belongs to the surface, never to the text. */
+html {
+  background: transparent !important;
+  opacity: 1 !important;
+}
+body {
+  --text: #f5f6f8 !important;
+  --muted: #c6cbd4 !important;
+  --panel: transparent !important;
+  --panel-border: rgba(255, 255, 255, 0.16) !important;
+  background: rgba(24, 26, 30, GLASS_ALPHA) !important;
+  color: var(--text) !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+body.theme-light {
+  --text: #17212f !important;
+  --muted: #344357 !important;
+  --panel-border: rgba(20, 30, 40, 0.2) !important;
+  background: rgba(243, 246, 250, GLASS_ALPHA) !important;
+  text-shadow: none;
+}
+#app, .container, .workspace, #answer {
+  background: transparent !important;
+  opacity: 1 !important;
+}
+.workspace {
+  border-color: var(--panel-border) !important;
+  box-shadow: none !important;
+}
+#answer .code-wrap { background: rgba(16, 20, 26, 0.5) !important; }
+#answer .code-header { background: rgba(30, 34, 40, 0.5) !important; }
+#answer .code-block { color: #f3f4f6; }
+#answer .tok-cm { color: #b6c0ce; }
+.header { -webkit-app-region: drag; }
+.header button, .header a, .header input, .toolbar {
+  -webkit-app-region: no-drag;
+}

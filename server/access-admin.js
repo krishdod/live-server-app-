@@ -36,6 +36,7 @@
     for (const request of requests) {
       const card = document.createElement("article");
       card.className = "request-row";
+      card.dataset.state = request.status;
       const heading = label(card, "h2", request.name || "Viewer");
       label(heading, "span", request.status, "pill");
       label(card, "p", request.code, "request-code");
@@ -53,7 +54,7 @@
       }
       if (request.status === "pending") {
         button("Approve for 1 hour", "approve", "hour");
-        button("Approve for 24 hours", "approve", "day");
+        button("Approve for 24 hours", "approve", "day", "secondary");
         button("Reject", "reject", undefined, "secondary");
       } else if (request.status === "approved") {
         button("Revoke access", "revoke", undefined, "danger");
@@ -62,6 +63,8 @@
       fragment.append(card);
     }
     byId("requests").replaceChildren(fragment);
+    byId("pendingCount").textContent = String(requests.filter(row => row.status === "pending").length);
+    byId("approvedCount").textContent = String(requests.filter(row => row.status === "approved").length);
     byId("emptyState").hidden = requests.length > 0;
   }
   function schedule() {

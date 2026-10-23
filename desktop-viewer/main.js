@@ -3,18 +3,21 @@ const path = require("node:path");
 const os = require("node:os");
 const { pathToFileURL } = require("node:url");
 const { normalizeViewerUrl, allowedNavigation, isReadyViewer, supportsCaptureExclusion } = require("./policy");
+const { createAppearance, DEFAULT_BACKGROUND_OPACITY } = require("./appearance");
 
 const HEADER_HEIGHT = 176;
 const COMPACT_HEADER_HEIGHT = 128;
+const COLLAPSED_HEADER_HEIGHT = 44;
 const TOGGLE_SHORTCUT = "Control+Alt+V";
 const PIN_SHORTCUT = "Control+Alt+T";
 const OPACITY_UP_SHORTCUT = "Control+Alt+=";
 const OPACITY_DOWN_SHORTCUT = "Control+Alt+-";
 const CLICK_THROUGH_SHORTCUT = "Control+Alt+C";
+const TOOLBAR_SHORTCUT = "Control+Alt+B";
 const OPACITY_STEP = 0.05;
 const MIN_OPACITY = 0.2;
 const MAX_OPACITY = 1;
-const CHANNELS = ["status", "open", "reload", "hide", "quit", "pin", "opacity", "clickThrough", "pointer", "linkBar"]
+const CHANNELS = ["status", "open", "reload", "hide", "quit", "pin", "opacity", "clickThrough", "pointer", "linkBar", "toolbar"]
   .map(name => `viewer:${name}`);
 
 function createViewer(electron, options = {}) {
@@ -28,13 +31,14 @@ function createViewer(electron, options = {}) {
   let opacityUpShortcut = false;
   let opacityDownShortcut = false;
   let clickThroughShortcut = false;
+  let toolbarShortcut = false;
   let pinned = true;
-  let opacity = 1;
+  let opacity = DEFAULT_BACKGROUND_OPACITY;
   let clickThrough = false;
   let interactivePage = true;
-  let hasOpenedReadyViewer = false;
   let pointerOverToolbar = true;
   let linkHidden = false;
+  let toolbarHidden = false;
   let headerHeight = HEADER_HEIGHT;
   let pointerPoll = null;
   let view = null;
@@ -47,6 +51,7 @@ function createViewer(electron, options = {}) {
     title: "Live Workspace Viewer", width: 880, height: 680,
     minWidth: 560, minHeight: 410, show: false, alwaysOnTop: true,
     skipTaskbar: false, backgroundColor: "#10151d", autoHideMenuBar: true,
+    transparent: true, frame: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
@@ -54,6 +59,7 @@ function createViewer(electron, options = {}) {
     }
   });
   win.setMenu(null);
+  const appearance = createAppearance(win, options.platform ?? process.platform, options.release ?? os.release());
 
   function applyPinned() {
     // screen-saver level keeps the window above normal apps, similar to PowerToys Always on Top.
@@ -66,7 +72,7 @@ function createViewer(electron, options = {}) {
     }
   }
   function applyOpacity() {
-    try { win.setOpacity(interactivePage ? 1 : opacity); } catch { /* harness / unsupported */ }
+    appearance.apply(view, interactivePage, opacity);
   }
   function applyClickThrough() {
     if (closed) return;
@@ -77,7 +83,7 @@ function createViewer(electron, options = {}) {
     }
   }
   function syncHeaderHeight() {
-    headerHeight = linkHidden ? COMPACT_HEADER_HEIGHT : HEADER_HEIGHT;
+    headerHeight = toolbarHidden ? COLLAPSED_HEADER_HEIGHT : linkHidden ? COMPACT_HEADER_HEIGHT : HEADER_HEIGHT;
   }
   function stopPointerPoll() {
     if (pointerPoll) {
@@ -112,9 +118,9 @@ function createViewer(electron, options = {}) {
   function snapshot() {
     return {
       protection: protectedContent, supported, shortcut, pinShortcut,
-      opacityUpShortcut, opacityDownShortcut, clickThroughShortcut,
+      opacityUpShortcut, opacityDownShortcut, clickThroughShortcut, toolbarShortcut,
       pinned, opacity: interactivePage ? 1 : opacity,
-      clickThrough: !interactivePage && clickThrough, interactivePage, linkHidden, headerHeight, message
+      clickThrough: !interactivePage && clickThrough, interactivePage, linkHidden, toolbarHidden, headerHeight, message
     };
   }
   function report(text) {
@@ -138,9 +144,9 @@ function createViewer(electron, options = {}) {
       win.contentView.removeChildView(view);
       view.webContents.close();
       view = null;
-      report("Capture protection could not be restored. Reopen the app before connecting.");
+      showInteractivePage("Capture protection could not be restored. Reopen the app before connecting.");
     }
-    win.setSkipTaskbar(protectedContent && shortcut);
+    win.setSkipTaskbar(false);
     applyPinned();
     applyOpacity();
     applyClickThrough();
@@ -163,13 +169,13 @@ function createViewer(electron, options = {}) {
   }
   function adjustOpacity(delta) {
     if (interactivePage) {
-      report("Opacity controls are available after the live viewer opens.");
+      report("Background controls are available after the live viewer opens.");
       return snapshot();
     }
     const next = Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, Math.round((opacity + delta) * 100) / 100));
     opacity = next;
     applyOpacity();
-    report(`Opacity ${Math.round(opacity * 100)}%`);
+    report(`Background ${Math.round(opacity * 100)}% — text stays fully clear.`);
     return snapshot();
   }
   function setClickThrough(value) {
@@ -195,9 +201,20 @@ function createViewer(electron, options = {}) {
   }
   function setLinkBarVisible(visible) {
     linkHidden = visible !== true;
+    if (visible === true) toolbarHidden = false;
     syncHeaderHeight();
     resizeView();
     if (!closed && !win.webContents.isDestroyed()) win.webContents.send("viewer:status-changed", snapshot());
+    return snapshot();
+  }
+  function setToolbarVisible(visible) {
+    // The collapsed strip keeps Controls reachable even without a shortcut.
+    toolbarHidden = visible !== true && !interactivePage;
+    pointerOverToolbar = true;
+    syncHeaderHeight();
+    resizeView();
+    applyClickThrough();
+    report(toolbarHidden ? "Viewer ready. Choose Controls to adjust your window." : "Controls shown. Choose Done to return to the viewer.");
     return snapshot();
   }
   if (options.registerShortcut !== false) {
@@ -218,9 +235,18 @@ function createViewer(electron, options = {}) {
     try {
       clickThroughShortcut = globalShortcut.register(CLICK_THROUGH_SHORTCUT, () => { toggleClickThrough(); });
     } catch { clickThroughShortcut = false; }
+    try {
+      toolbarShortcut = globalShortcut.register(TOOLBAR_SHORTCUT, () => {
+        setToolbarVisible(toolbarHidden);
+        if (!toolbarHidden && options.showWindow !== false) {
+          restore();
+          win.webContents.focus();
+        }
+      });
+    } catch { toolbarShortcut = false; }
   }
-  // Only leave the taskbar/Dock once a global recovery shortcut is registered.
-  win.setSkipTaskbar(protectedContent && shortcut);
+  // Keep the app discoverable; hiding is always an explicit user action.
+  win.setSkipTaskbar(false);
   if (!shortcut && protectedContent) {
     message = "Ctrl+Alt+V is unavailable. The viewer will stay on the taskbar/Dock.";
   }
@@ -249,6 +275,9 @@ function createViewer(electron, options = {}) {
 
   function showInteractivePage(text) {
     interactivePage = true;
+    toolbarHidden = false;
+    syncHeaderHeight();
+    resizeView();
     pointerOverToolbar = true;
     applyOpacity();
     applyClickThrough();
@@ -262,25 +291,22 @@ function createViewer(electron, options = {}) {
   }
 
   function activateReadyViewer() {
-    if (!interactivePage) return;
+    if (!interactivePage) { applyOpacity(); return; }
     interactivePage = false;
     linkHidden = true;
+    toolbarHidden = true;
     syncHeaderHeight();
     resizeView();
     applyPinned();
-    if (!hasOpenedReadyViewer) clickThrough = true;
     applyOpacity();
     pointerOverToolbar = true;
     applyClickThrough();
     refreshPointerPoll();
-    const firstReady = !hasOpenedReadyViewer;
-    hasOpenedReadyViewer = true;
-    if (firstReady && shortcut) {
-      hide();
-      report("Viewer ready and hidden. Ctrl+Alt+V shows it · Ctrl+Alt+C toggles click-through.");
-    } else {
-      report("Viewer ready. Your window controls are available; hover the toolbar to use them.");
+    if (options.showWindow !== false && !closed) {
+      if (win.isMinimized()) win.restore();
+      win.show();
     }
+    report("Access approved. Your live viewer is open. Choose Controls for window settings.");
   }
 
   async function openViewer(raw) {
@@ -297,7 +323,7 @@ function createViewer(electron, options = {}) {
       }
       loadGeneration++;
       viewerUrl = "";
-      report("Capture protection is unavailable. The live page was not opened.");
+      showInteractivePage("Capture protection is unavailable. The live page was not opened.");
       return { ok: false, error: message };
     }
     const generation = ++loadGeneration;
@@ -381,6 +407,7 @@ function createViewer(electron, options = {}) {
   handle("clickThrough", setClickThrough);
   handle("pointer", setPointerOverToolbar);
   handle("linkBar", setLinkBarVisible);
+  handle("toolbar", setToolbarVisible);
   win.webContents.on("did-finish-load", () => report(message));
   win.once("ready-to-show", () => {
     if (options.showWindow !== false && !closed) win.show();
@@ -389,19 +416,21 @@ function createViewer(electron, options = {}) {
     closed = true;
     loadGeneration++;
     stopPointerPoll();
+    appearance.dispose();
     if (view && !view.webContents.isDestroyed()) view.webContents.close();
     if (shortcut) globalShortcut.unregister(TOGGLE_SHORTCUT);
     if (pinShortcut) globalShortcut.unregister(PIN_SHORTCUT);
     if (opacityUpShortcut) globalShortcut.unregister(OPACITY_UP_SHORTCUT);
     if (opacityDownShortcut) globalShortcut.unregister(OPACITY_DOWN_SHORTCUT);
     if (clickThroughShortcut) globalShortcut.unregister(CLICK_THROUGH_SHORTCUT);
+    if (toolbarShortcut) globalShortcut.unregister(TOOLBAR_SHORTCUT);
     CHANNELS.forEach(channel => ipcMain.removeHandler(channel));
   });
   win.loadFile(homePath);
   return {
     window: win, snapshot, openViewer, hide, restore, setPinned, togglePinned,
     adjustOpacity, setClickThrough, toggleClickThrough, setPointerOverToolbar,
-    setLinkBarVisible, getView: () => view, getOpacity: () => opacity,
+    setLinkBarVisible, setToolbarVisible, getView: () => view, getOpacity: () => opacity,
     getHeaderHeight: () => headerHeight
   };
 }
@@ -418,7 +447,7 @@ function start() {
 
 if (require.main === module) start();
 module.exports = {
-  createViewer, HEADER_HEIGHT, COMPACT_HEADER_HEIGHT, TOGGLE_SHORTCUT, PIN_SHORTCUT,
-  OPACITY_UP_SHORTCUT, OPACITY_DOWN_SHORTCUT, CLICK_THROUGH_SHORTCUT,
+  createViewer, HEADER_HEIGHT, COMPACT_HEADER_HEIGHT, COLLAPSED_HEADER_HEIGHT, TOGGLE_SHORTCUT, PIN_SHORTCUT,
+  OPACITY_UP_SHORTCUT, OPACITY_DOWN_SHORTCUT, CLICK_THROUGH_SHORTCUT, TOOLBAR_SHORTCUT,
   OPACITY_STEP, MIN_OPACITY, MAX_OPACITY
 };

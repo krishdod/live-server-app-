@@ -34,6 +34,7 @@
       ? "Share this code with the owner so they can identify your request. This window opens automatically when they approve."
       : "Enter your name, then share your request code with the owner. Only the owner can approve access.";
     byId("requestCode").textContent = pending ? data.code || "" : "";
+    byId("copyCodeBtn").textContent = "Copy code";
     byId("requestStatus").textContent = pending ? `Request from ${data.name || "you"}` : "";
     byId("requestExpiry").textContent = pending && data.pendingExpiresAt
       ? `Request expires ${new Date(data.pendingExpiresAt).toLocaleString()}.` : "";
@@ -100,6 +101,15 @@
       showStatus({ enabled: true, status: "none" });
     } catch (error) { notice(error.message, true); }
     finally { busy = false; byId("endBtn").disabled = false; schedule(); }
+  });
+  byId("copyCodeBtn").addEventListener("click", async () => {
+    const code = byId("requestCode").textContent;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      byId("copyCodeBtn").textContent = "Copied";
+      notice("Request code copied. Send it to the owner.");
+    } catch { notice("Select your request code and copy it to share with the owner."); }
   });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && !busy) checkStatus();

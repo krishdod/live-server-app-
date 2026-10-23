@@ -7,7 +7,7 @@ working as before.
 ## Open the viewer
 
 1. Open the built desktop app.
-2. Choose **Open** to use the default public access page, or paste your server's
+2. Choose **Open** to use `https://live-server-app.onrender.com/access`, or paste your server's
    `/access` address. A GitHub repository URL is not a viewer link.
 3. Enter your name, request access, and give the displayed request code to the
    owner. Once approved, the live viewer opens automatically. Approval and login
@@ -24,17 +24,18 @@ server as part of opening the link; the app does not need the extension's
 ## Controls
 
 - **Always on Top** keeps the viewer above other windows (on by default). **Ctrl+Alt+T** toggles it (Control+Option+T on Mac).
-- **Click-through** (on after your first approved connection, or **Ctrl+Alt+C**) lets you click apps behind this window. Hover the toolbar to use its controls. It is temporarily disabled on approval and login pages.
-- **Opacity** + / − (or **Ctrl+Alt+=** / **Ctrl+Alt+-**) fades the window over your meeting.
+- **Click-through** starts off so the viewer is clickable. Enable it in **Controls**, or press **Ctrl+Alt+C**, to click apps behind the page. The compact controls strip stays clickable. Approval and login pages always accept mouse input.
+- **Background** + / − (or **Ctrl+Alt+=** / **Ctrl+Alt+-**) adjusts the glass surface from 20% to 100% opacity. It starts at 75%; words and code remain fully opaque. Approval and sign-in pages stay solid. Native background blur is requested on supported Windows 11 and macOS hosts; other hosts use plain translucency.
+- After approval, the setup panel collapses into a 44px strip with **Controls** and **Close**. Choose **Controls** or press **Ctrl+Alt+B** for window settings; **Done** collapses them again. The visible button works even if the shortcut cannot register.
 - The link box is shown at the start. After **Open**, that section is removed and the toolbar shrinks. **Link** brings the address box back.
-- After your first approved connection, the window hides itself when the show/hide shortcut is available. Ctrl+Alt+V brings it back. Expired or revoked access returns to the visible request screen.
+- Approval keeps the viewer open and visible. Expired or revoked access returns to the visible request screen and restores the control panel.
 - **Reload** reloads the current viewer page.
 - **Hide** hides this window. **Ctrl+Alt+V** (Control+Option+V on Mac) brings it back or hides it again.
 - **Close** exits the app.
 
-When capture protection and the show/hide shortcut are available, the app is
-removed from the Windows taskbar / macOS Dock. Use Ctrl+Alt+V to bring it back.
-Launching the app again also brings the existing window forward.
+The open app remains available from the Windows taskbar / macOS Dock. Hiding
+requires an explicit **Hide** action or Ctrl+Alt+V. Launching the app again also
+brings the existing window forward.
 
 If another app already owns Ctrl+Alt+V, **Hide** is disabled and the header
 reports that the shortcut is unavailable. The app remains available from the
@@ -76,7 +77,7 @@ npm.cmd ci
 npm.cmd run dist
 ```
 
-Open `dist-v5/LiveWorkspaceViewer-1.1.0-portable.exe`. The previous `dist-v4`
+Open `dist-v8/LiveWorkspaceViewer-1.4.0-portable.exe`. The previous `dist-v7`
 folder is preserved. Deploy the accompanying server update before sharing v5;
 see [Viewer access setup](../VIEWER-ACCESS.md).
 
@@ -105,7 +106,7 @@ npm ci
 npm run dist:mac
 ```
 
-Then open the `.app` under `dist-v5/mac-arm64` or `dist-v5/mac`.
+Then open the `.app` under `dist-v8/mac-arm64` or `dist-v8/mac`.
 
 ### Validation
 

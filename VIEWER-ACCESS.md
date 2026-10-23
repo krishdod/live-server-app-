@@ -8,7 +8,7 @@ or using a browser instead of the EXE does not skip approval.
 ## For the person using your app
 
 1. Open the new Windows viewer and choose **Open**. Its default address is
-   `https://live-workspace.onrender.com/access`.
+   `https://live-server-app.onrender.com/access`.
 2. Enter a name and choose **Request access**.
 3. Send the displayed request code to the owner through your usual conversation.
 4. Keep the app open. Once the owner approves, the live viewer opens automatically.
@@ -22,7 +22,7 @@ you intend to admit.
 ## For you, the owner
 
 Open your normal editor link and choose **Viewer access**, or open
-`https://live-workspace.onrender.com/access-admin` in your browser. The dashboard
+`https://live-server-app.onrender.com/access-admin` in your browser. The dashboard
 uses your existing editor access key and, if configured, your existing app
 password. Never give users your editor key, app password, or extension key.
 

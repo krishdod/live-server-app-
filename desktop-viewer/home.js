@@ -12,12 +12,16 @@ const shortcutHint = document.getElementById("shortcut-hint");
 const pinCheckbox = document.getElementById("pin");
 const clickThroughCheckbox = document.getElementById("click-through");
 const changeLinkButton = document.getElementById("change-link");
+const hideControlsButton = document.getElementById("hide-controls");
+const showControlsButton = document.getElementById("show-controls");
+const stripCloseButton = document.getElementById("strip-close");
 const opacityLabel = document.getElementById("opacity-label");
 const opacityUp = document.getElementById("opacity-up");
 const opacityDown = document.getElementById("opacity-down");
-const DEFAULT_VIEWER_URL = "https://live-workspace.onrender.com/access";
+const DEFAULT_VIEWER_URL = "https://live-server-app.onrender.com/access";
 const FULL_HEADER = 176;
 const COMPACT_HEADER = 128;
+const COLLAPSED_HEADER = 44;
 let opening = false;
 let currentStatus = null;
 let lastPointerOverToolbar = true;
@@ -32,6 +36,7 @@ function showError(message) {
 }
 
 function headerLimit() {
+  if (document.body.classList.contains("toolbar-hidden")) return COLLAPSED_HEADER;
   return document.body.classList.contains("compact") ? COMPACT_HEADER : FULL_HEADER;
 }
 
@@ -53,6 +58,8 @@ function revealLinkEditor() {
 }
 
 function applyStatus(status) {
+  const wasCollapsed = document.body.classList.contains("toolbar-hidden");
+  const focusInPanel = document.querySelector(".toolbar").contains(document.activeElement);
   currentStatus = status || {};
   const protectedWindow = currentStatus.supported && currentStatus.protection;
   protectionLabel.textContent = protectedWindow ? "Capture protection on" : "Protection unavailable";
@@ -67,6 +74,7 @@ function applyStatus(status) {
 
   const parts = [];
   if (currentStatus.shortcut) parts.push("<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> show/hide");
+  if (currentStatus.toolbarShortcut) parts.push("<kbd>B</kbd> controls");
   if (currentStatus.pinShortcut) parts.push("<kbd>T</kbd> pin");
   if (currentStatus.clickThroughShortcut) parts.push("<kbd>C</kbd> click-through");
   if (currentStatus.opacityUpShortcut || currentStatus.opacityDownShortcut) parts.push("<kbd>=</kbd>/<kbd>-</kbd> opacity");
@@ -81,7 +89,7 @@ function applyStatus(status) {
     : "Click apps behind the live viewer";
 
   const percent = Math.round((Number(currentStatus.opacity) || 1) * 100);
-  opacityLabel.textContent = `${percent}%`;
+  opacityLabel.textContent = `BG ${percent}%`;
   opacityUp.disabled = Boolean(currentStatus.interactivePage) || percent >= 100;
   opacityDown.disabled = Boolean(currentStatus.interactivePage) || percent <= 20;
 
@@ -90,6 +98,13 @@ function applyStatus(status) {
     changeLinkButton.hidden = true;
     document.body.classList.remove("compact");
   }
+  document.body.classList.toggle("toolbar-hidden", Boolean(currentStatus.toolbarHidden));
+  document.documentElement.classList.toggle("viewer-glass", currentStatus.interactivePage === false);
+  hideControlsButton.hidden = currentStatus.interactivePage !== false;
+  showControlsButton.setAttribute("aria-expanded", String(!currentStatus.toolbarHidden));
+  document.querySelector(".ready-label").textContent = currentStatus.clickThrough ? "Click-through on" : "Viewer ready";
+  if (currentStatus.toolbarHidden && !wasCollapsed && focusInPanel) showControlsButton.focus();
+  if (!currentStatus.toolbarHidden && wasCollapsed && !currentStatus.interactivePage && document.activeElement === showControlsButton) hideControlsButton.focus();
 
   statusMessage.classList.remove("error-message");
   statusMessage.textContent = !currentStatus.shortcut
@@ -126,6 +141,24 @@ form.addEventListener("submit", async (event) => {
 changeLinkButton.addEventListener("click", () => {
   revealLinkEditor();
 });
+hideControlsButton.addEventListener("click", async () => {
+  try {
+    const status = await api.setToolbarVisible(false);
+    if (status) applyStatus(status);
+  } catch {
+    showError("The controls could not be hidden. Try Ctrl+Alt+B.");
+  }
+});
+showControlsButton.addEventListener("click", async () => {
+  try {
+    const status = await api.setToolbarVisible(true);
+    if (status) applyStatus(status);
+    hideControlsButton.focus();
+  } catch {
+    showError("The controls could not be opened. Try Ctrl+Alt+B.");
+  }
+});
+stripCloseButton.addEventListener("click", () => api.quit());
 
 document.getElementById("reload").addEventListener("click", () => api.reload());
 hideButton.addEventListener("click", () => {
@@ -193,5 +226,7 @@ if (api) {
   opacityDown.disabled = true;
   document.getElementById("reload").disabled = true;
   document.getElementById("close").disabled = true;
+  showControlsButton.disabled = true;
+  stripCloseButton.disabled = true;
   showError("Open the desktop app to use this viewer.");
 }

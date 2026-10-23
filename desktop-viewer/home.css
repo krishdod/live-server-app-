@@ -5,6 +5,8 @@
   background: #10151d;
   font-synthesis: none;
 }
+html.viewer-glass, html.viewer-glass body { background: transparent; }
+html.viewer-glass .welcome { display: none; }
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 560px; }
@@ -13,7 +15,27 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.45; }
 button:focus-visible, input:focus-visible { outline: 2px solid #8eaaff; outline-offset: 3px; }
 
-/* The native viewer starts at y=176 (or 128 when compact). Keep this exact. */
+/* Match native view offsets: 176px setup, 128px settings, 44px collapsed strip. */
+.viewer-strip {
+  display: none;
+  height: 44px;
+  padding: 0 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #171e29;
+  border-bottom: 1px solid #303c4e;
+}
+body.toolbar-hidden .viewer-strip { display: flex; }
+.strip-heading { display: flex; align-items: center; gap: 12px; min-width: 0; -webkit-app-region: drag; flex: 1; height: 100%; }
+.strip-heading strong { color: #e9edf5; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.ready-label { display: inline-flex; gap: 6px; align-items: center; color: #93d6b2; font-size: 12px; white-space: nowrap; }
+.ready-label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.strip-actions { display: flex; gap: 8px; -webkit-app-region: no-drag; }
+.strip-actions button { height: 30px; padding: 0 12px; border: 1px solid #3a475b; border-radius: 6px; color: #d5deec; background: #202a39; font-size: 12px; }
+.strip-actions button:hover:not(:disabled) { background: #2c3a50; color: #fff; }
+#show-controls { border-color: #526b9a; }
+#strip-close:hover { color: #ffd2ca; border-color: #b4746b; }
 .toolbar {
   height: 176px;
   padding: 14px 18px;
@@ -26,9 +48,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #8eaaff; outline-
 body.compact .toolbar { height: 128px; }
 body.compact .address-row { display: none; }
 body.compact .welcome { min-height: calc(100vh - 128px); }
+body.toolbar-hidden .toolbar, body.toolbar-hidden .welcome { display: none; }
+[hidden] { display: none !important; }
 
 .heading-row, .controls-row, .hint-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.heading-row { min-height: 24px; }
+.heading-row { min-height: 24px; -webkit-app-region: drag; }
 h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.2px; white-space: nowrap; }
 h1 span { color: #95a1b5; font-weight: 400; margin-left: 4px; }
 .protection { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; white-space: nowrap; }
@@ -52,11 +76,11 @@ h1 span { color: #95a1b5; font-weight: 400; margin-left: 4px; }
   border: 1px solid #354154; border-radius: 5px; font-size: 14px; line-height: 1;
 }
 .opacity-control button:hover:not(:disabled) { background: #293447; color: #fff; }
-#opacity-label { min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; color: #d5deec; }
+#opacity-label { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: #d5deec; }
 .window-actions { display: flex; gap: 5px; }
 .window-actions button { color: #c5cfdd; background: transparent; border: 1px solid #354154; border-radius: 5px; padding: 4px 10px; font-size: 12px; line-height: 17px; }
 .window-actions button:hover:not(:disabled) { background: #293447; color: #fff; }
-.hint-row { min-height: 22px; align-items: center; }
+.hint-row { min-height: 22px; align-items: flex-start; flex-direction: column; gap: 2px; }
 #status-message { color: #98a7bd; font-size: 11px; line-height: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-message.error-message { color: #ffbcaf; }
 #shortcut-hint { flex: 0 0 auto; color: #93a0b6; font-size: 10px; white-space: nowrap; }
@@ -84,4 +108,8 @@ li > span { border: 1px solid #36455e; border-radius: 50%; width: 24px; height: 
   #status-message { font-size: 10px; }
   #shortcut-hint { font-size: 9px; }
   .welcome { padding: 32px 24px; }
+  .control-group { gap: 8px; }
+  .opacity-control button { width: 22px; }
+  #opacity-label { min-width: 44px; }
+  .window-actions button { padding-left: 6px; padding-right: 6px; font-size: 11px; }
 }

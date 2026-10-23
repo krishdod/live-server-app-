@@ -150,8 +150,8 @@ Reload the extension.
 The separate desktop companion and instructions are in
 [`desktop-viewer/README.md`](desktop-viewer/README.md). It opens the existing
 live viewer link, requests capture exclusion on Windows and macOS, and provides Ctrl+Alt+V
-to hide or restore the window. It stays off the taskbar when that recovery
-shortcut is available. Test the receiving side of the actual screen share:
+to hide or restore the window. Approval keeps the app visible on the taskbar;
+the setup panel collapses into a small Controls strip. Test the receiving side of the actual screen share:
 this does not hide Chrome, other apps, or the process in Task Manager, and
 it is not a guarantee against every capture method. The v5 approval flow needs
 the matching server update deployed first; see [Viewer access](VIEWER-ACCESS.md).

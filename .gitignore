@@ -8,7 +8,10 @@ desktop-viewer/dist/
 desktop-viewer/dist-*/
 artifacts/approval-baseline/
 artifacts/approval-checks/
+artifacts/website-checks/
 desktop-viewer/smoke-result.json
 __pycache__/
 .env
 config.js
+
+.review-latest/

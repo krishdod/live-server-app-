@@ -6,17 +6,33 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
   <title>Live Workspace — Access required</title>
+  <link rel="stylesheet" href="/workspace.css">
   <link rel="stylesheet" href="/access.css">
   <script src="/access.js" defer></script>
 </head>
 <body>
-  <main class="card access-card">
-    <p class="eyebrow">LIVE WORKSPACE</p>
-    <h1 id="heading">Ask the owner for access</h1>
+  <header class="site-nav">
+    <a class="brand" href="/access"><span class="brand-mark" aria-hidden="true"></span>Live Workspace</a>
+    <a class="nav-link" href="/access-admin">Owner sign-in &rarr;</a>
+  </header>
+  <main class="access-layout">
+    <section class="access-intro" aria-labelledby="join-title">
+      <p class="section-label">Viewer access</p>
+      <h1 id="join-title">Join the workspace.</h1>
+      <p>Follow the conversation as it happens. One request, approved by the person sharing.</p>
+      <ol class="access-steps">
+        <li><span>01</span><div><strong>Request access</strong>Use a name the owner will recognize.</div></li>
+        <li><span>02</span><div><strong>Share your code</strong>Send it directly to the workspace owner.</div></li>
+        <li><span>03</span><div><strong>Start viewing</strong>Your workspace opens when you are approved.</div></li>
+      </ol>
+    </section>
+    <section class="card access-card" aria-labelledby="heading">
+    <p class="eyebrow">An invitation to follow along</p>
+    <h2 id="heading">Ask the owner for access</h2>
     <p id="description">Enter your name, then share your request code with the owner. Only the owner can approve access.</p>
     <form id="requestForm">
       <label for="name">Your name</label>
-      <input id="name" name="name" autocomplete="name" maxlength="80" required placeholder="How the owner knows you">
+      <input id="name" name="name" autocomplete="name" maxlength="80" required placeholder="How the owner knows you" aria-describedby="notice">
       <button id="requestBtn" type="submit">Request access</button>
     </form>
     <section id="requestDetails" hidden aria-live="polite">
@@ -24,10 +40,12 @@
       <p class="request-code" id="requestCode"></p>
       <p id="requestStatus"></p>
       <p class="muted" id="requestExpiry"></p>
-      <button id="endBtn" type="button" class="secondary">Cancel request</button>
+      <div class="actions"><button id="copyCodeBtn" type="button">Copy code</button><button id="endBtn" type="button" class="secondary">Cancel request</button></div>
     </section>
     <p id="notice" class="notice" role="status" aria-live="polite">Checking access…</p>
-    <p class="footnote">No payment or authenticator app needed. Keep this window open while waiting. Access requests reset if the server restarts.</p>
+    <p class="footnote">Keep this window open while waiting. The owner decides who can view and for how long.</p>
+    </section>
   </main>
+  <footer class="site-footer"><span>Live Workspace</span><span>Shared by invitation. Read-only for viewers.</span></footer>
 </body>
 </html>

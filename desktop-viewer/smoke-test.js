@@ -27,10 +27,10 @@ app.whenReady().then(async () => {
       res.end(JSON.stringify({ secured: false, ok: true, role: 'view' }));
       return;
     }
-    const files = { '/': 'viewer.html', '/markdown.js': 'markdown.js',
+    const files = { '/': 'viewer.html', '/markdown.js': 'markdown.js', '/workspace.css': 'workspace.css',
       '/vendor/marked.umd.js': 'vendor/marked.umd.js', '/vendor/purify.min.js': 'vendor/purify.min.js' };
     if (!files[url.pathname]) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'content-type': url.pathname === '/' ? 'text/html' : 'text/javascript' });
+    res.writeHead(200, { 'content-type': url.pathname === '/' ? 'text/html' : url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript' });
     res.end(fs.readFileSync(path.join(__dirname, '../server', files[url.pathname])));
   });
   wss = new WebSocketServer({ server });

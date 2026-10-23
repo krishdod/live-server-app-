@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("viewerApi", Object.freeze({
   setClickThrough: value => ipcRenderer.invoke("viewer:clickThrough", value),
   setPointerOverToolbar: over => ipcRenderer.invoke("viewer:pointer", over),
   setLinkBarVisible: visible => ipcRenderer.invoke("viewer:linkBar", visible),
+  setToolbarVisible: visible => ipcRenderer.invoke("viewer:toolbar", visible),
   onStatus: callback => {
     const handler = (_event, status) => callback(status);
     ipcRenderer.on("viewer:status-changed", handler);

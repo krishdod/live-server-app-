@@ -36,6 +36,13 @@ test("cancel request clears the waiting code and restores request form", async t
   assert.equal(h.navigations.length, 0);
 });
 
+test("waiting viewers can copy the exact request code without exposing credentials", async t => {
+  const h = await page(t, "access", { fetch: async () => response(pending) });
+  await h.click("copyCodeBtn");
+  assert.equal(h.clipboard.at(-1), pending.code);
+  assert.equal(h.el("copyCodeBtn").textContent, "Copied");
+});
+
 for (const state of ["rejected", "revoked", "expired"]) {
   test(`${state} request stays blocked and offers a new request`, async t => {
     const h = await page(t, "access", { fetch: async () => response({ ...pending, status: state }) });
@@ -79,11 +86,13 @@ test("owner sign-in approves and revokes only the selected request and safely re
   h.el("ownerKey").value = "owner-key"; h.el("ownerPassword").value = "owner-password";
   await h.submit("ownerForm");
   assert.equal(h.el("dashboard").hidden, false);
+  assert.equal(h.el("pendingCount").textContent, "2");
   assert.equal(h.el("ownerKey").value, ""); assert.equal(h.el("ownerPassword").value, "");
   assert.equal(h.el("requests").querySelector("img"), null);
   assert.match(h.el("requests").textContent, /<img/);
   h.el("requests").querySelectorAll(".request-row")[1].querySelector("button").click(); await flush();
   assert.deepEqual(changes[0], { id: "request-two", action: "approve", duration: "hour" });
+  assert.equal(h.el("approvedCount").textContent, "1");
   h.el("requests").querySelectorAll(".request-row")[1].querySelector("button").click(); await flush();
   assert.deepEqual(changes[1], { id: "request-two", action: "revoke" });
   await h.click("copyViewerLink"); assert.equal(h.clipboard.at(-1), "https://workspace.test/access");

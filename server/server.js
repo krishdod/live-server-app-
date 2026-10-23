@@ -439,7 +439,8 @@ const server = http.createServer(async (req, res) => {
     "/access-admin": ["access-admin.html", "text/html"],
     "/access.js": ["access.js", "text/javascript"],
     "/access-admin.js": ["access-admin.js", "text/javascript"],
-    "/access.css": ["access.css", "text/css"]
+    "/access.css": ["access.css", "text/css"],
+    "/workspace.css": ["workspace.css", "text/css"]
   };
   if (req.method === "GET" && Object.hasOwn(staticFiles, pathname)) {
     try {

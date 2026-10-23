@@ -6,15 +6,22 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
   <title>Live Workspace — Viewer access</title>
+  <link rel="stylesheet" href="/workspace.css">
   <link rel="stylesheet" href="/access.css">
   <script src="/access-admin.js" defer></script>
 </head>
 <body>
-  <main class="card admin-page">
-    <p class="eyebrow">LIVE WORKSPACE · OWNER</p>
+  <header class="site-nav">
+    <a class="brand" href="/?role=edit"><span class="brand-mark" aria-hidden="true"></span>Live Workspace</a>
+    <span class="section-label">Owner dashboard</span>
+  </header>
+  <main class="admin-page">
+    <div class="page-heading"><div>
+    <p class="eyebrow">People &amp; permissions</p>
     <h1>Viewer access</h1>
     <p>Users need your approval before they can see your stream. Ask them for their request code and match it here before approving.</p>
-    <form id="ownerForm" hidden>
+    </div></div>
+    <form id="ownerForm" class="owner-form" hidden>
       <label for="ownerKey">Owner access key</label>
       <input id="ownerKey" type="password" autocomplete="off" required>
       <label for="ownerPassword">Workspace password <span class="muted">(if configured)</span></label>
@@ -22,17 +29,21 @@
       <button id="ownerLoginBtn" type="submit">Open access dashboard</button>
     </form>
     <div id="dashboard" hidden>
+      <div class="dashboard-bar">
+      <dl class="dashboard-counts" aria-label="Access overview"><div><dt>Pending</dt><dd id="pendingCount">0</dd></div><div><dt>Approved</dt><dd id="approvedCount">0</dd></div></dl>
       <div class="toolbar">
         <button id="copyViewerLink" type="button">Copy viewer link</button>
         <button id="refreshBtn" class="secondary" type="button">Refresh</button>
         <a class="button-link secondary" href="/?role=edit">Back to workspace</a>
-        <button id="ownerSignOut" class="secondary" type="button">Sign out here</button>
+        <button id="ownerSignOut" class="secondary" type="button">Sign out</button>
       </div>
-      <p class="muted">Approvals last 1 hour or 24 hours from approval. Revoke ends that viewer’s access immediately. Requests and approvals reset if the server restarts.</p>
-      <p id="emptyState" hidden>No requests yet. Share the viewer link with someone to get started.</p>
+      </div>
+      <p class="dashboard-help">Match the request code before approving. Access lasts 1 hour or 24 hours; you can revoke it at any time.</p>
+      <p id="emptyState" class="empty-state" hidden>No requests yet. Share the viewer link with someone to get started.</p>
       <div id="requests" class="request-list"></div>
     </div>
     <p id="notice" class="notice" role="status" aria-live="polite">Checking owner access…</p>
   </main>
+  <footer class="site-footer"><span>Live Workspace</span><span>Requests update automatically while this page is open.</span></footer>
 </body>
 </html>

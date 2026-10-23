@@ -685,8 +685,9 @@ body.overlay-mode #winControls {
 }
 
 </style>
+<link rel="stylesheet" href="/workspace.css">
 </head>
-<body>
+<body class="workspace-page">
 
 <div id="locked" class="hidden">
   <h2>You need access</h2>
@@ -697,7 +698,8 @@ body.overlay-mode #winControls {
   <h2>Password required</h2>
   <p>Enter the Live Workspace password to continue.</p>
   <form id="passwordForm" style="margin-top:16px;display:flex;flex-direction:column;gap:10px;align-items:stretch">
-    <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" style="padding:12px 14px;border-radius:10px;border:1px solid var(--panel-border);background:var(--panel);color:var(--text);font-size:14px;outline:none" />
+    <label for="passwordInput">Workspace password</label>
+    <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" style="padding:12px 14px;border-radius:10px;border:1px solid var(--panel-border);background:var(--panel);color:var(--text);font-size:14px" />
     <button id="passwordBtn" type="submit" style="padding:10px 16px;border:none;border-radius:999px;background:#2563eb;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Unlock</button>
   </form>
   <p id="passwordError" style="color:#f87171;font-size:13px;margin-top:10px;min-height:18px"></p>
@@ -707,7 +709,7 @@ body.overlay-mode #winControls {
   <button id="focusExit" type="button">Exit focus</button>
   <div class="container">
     <div class="header">
-      <div class="logo">Live Workspace</div>
+      <div class="logo"><span class="brand-mark" aria-hidden="true"></span>Live Workspace</div>
       <div class="toolbar">
         <span id="practiceLabel">Viewer</span>
         <button id="transparentBtn" type="button">Transparent: OFF</button>
@@ -723,11 +725,12 @@ body.overlay-mode #winControls {
       </div>
     </div>
     <div class="workspace">
+      <div class="document-heading"><p>Shared workspace</p><span>Live text &amp; notes</span></div>
       <div id="remoteSelBar"></div>
       <div id="answer" contenteditable="true" spellcheck="true"></div>
     </div>
     <div class="footer">
-      <span id="overlayHints"></span>Last Updated: <span id="updatedAt">--</span></div>
+      <span><span id="overlayHints"></span>Updates appear automatically</span><span>Last updated <time id="updatedAt">--</time></span></div>
   </div>
 </div>
 
@@ -740,7 +743,7 @@ body.overlay-mode #winControls {
     </div>
     <div class="share-section-title">General access</div>
     <div class="share-general">
-      <div class="share-globe">🌐</div>
+      <div class="share-globe" aria-hidden="true">↗</div>
       <div class="share-general-text">
         <select id="accessType">
           <option value="link">Anyone with the link</option>
@@ -753,7 +756,7 @@ body.overlay-mode #winControls {
       </select>
     </div>
     <div class="share-footer">
-      <button id="copyLinkBtn">🔗 Copy link</button>
+      <button id="copyLinkBtn">Copy link</button>
       <button id="shareDoneBtn">Done</button>
     </div>
     <div id="copyToast"></div>

@@ -9,6 +9,13 @@
   <script src="home.js" defer></script>
 </head>
 <body>
+  <div class="viewer-strip" role="toolbar" aria-label="Viewer controls">
+    <div class="strip-heading"><strong>Live Workspace</strong><span class="ready-label" role="status">Viewer ready</span></div>
+    <div class="strip-actions">
+      <button id="show-controls" type="button" aria-expanded="false" aria-keyshortcuts="Control+Alt+B" title="Window settings (Ctrl+Alt+B)">Controls</button>
+      <button id="strip-close" type="button" title="Close the viewer">Close</button>
+    </div>
+  </div>
   <header class="toolbar">
     <div class="heading-row">
       <h1>Live Workspace <span>Viewer</span></h1>
@@ -17,7 +24,7 @@
 
     <form id="open-form" class="address-row" autocomplete="off">
       <label for="viewer-url" class="sr-only">Viewer link</label>
-      <input id="viewer-url" type="url" inputmode="url" value="https://live-workspace.onrender.com/access" placeholder="Paste your viewer link" spellcheck="false" autocomplete="off" required>
+      <input id="viewer-url" type="url" inputmode="url" value="https://live-server-app.onrender.com/access" placeholder="Paste your viewer link" spellcheck="false" autocomplete="off" required>
       <button id="open-button" class="primary" type="submit">Open</button>
     </form>
 
@@ -29,14 +36,15 @@
         <label class="pin-control" title="Click apps behind this window (Ctrl+Alt+C)">
           <input id="click-through" type="checkbox"> Click-through
         </label>
-        <div class="opacity-control" title="Window opacity">
-          <button id="opacity-down" type="button" title="Decrease opacity (Ctrl+Alt+-)">−</button>
-          <span id="opacity-label">100%</span>
-          <button id="opacity-up" type="button" title="Increase opacity (Ctrl+Alt+=)">+</button>
+        <div class="opacity-control" title="Background opacity; text stays fully clear">
+          <button id="opacity-down" type="button" title="More transparent background (Ctrl+Alt+-)">−</button>
+          <span id="opacity-label">BG 100%</span>
+          <button id="opacity-up" type="button" title="More solid background (Ctrl+Alt+=)">+</button>
         </div>
       </div>
       <div class="window-actions">
         <button id="change-link" type="button" hidden title="Show the address box again">Link</button>
+        <button id="hide-controls" type="button" hidden title="Hide controls (Ctrl+Alt+B)" aria-label="Hide controls (Ctrl+Alt+B)">Done</button>
         <button id="reload" type="button" title="Reload the viewer">Reload</button>
         <button id="hide" type="button" disabled title="Waiting for keyboard shortcut">Hide</button>
         <button id="close" type="button" title="Close this app">Close</button>
@@ -45,7 +53,7 @@
 
     <div class="hint-row">
       <span id="status-message" role="status">Open the access page to request approval.</span>
-      <span id="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> · <kbd>T</kbd> pin · <kbd>C</kbd> click-through · <kbd>=</kbd>/<kbd>-</kbd> opacity</span>
+      <span id="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> · <kbd>B</kbd> controls · <kbd>T</kbd> pin · <kbd>C</kbd> click-through · <kbd>=</kbd>/<kbd>-</kbd> opacity</span>
     </div>
   </header>
 
@@ -55,9 +63,9 @@
       <h2>Request access, then open your live page.</h2>
       <p>Choose Open, request access, and share your request code with the owner. The page stays visible while you wait. Once approved, your familiar viewer controls become available.</p>
       <ol>
-        <li><span>1</span><div>After approval, the toolbar shrinks and the viewer hides once. Press Ctrl+Alt+V to show it.</div></li>
-        <li><span>2</span><div>Keep Always on Top on. With Click-through on, clicks go to apps behind; hover the toolbar to use controls.</div></li>
-        <li><span>3</span><div>Use opacity and Ctrl+Alt+V as needed, and test capture protection with your meeting app.</div></li>
+        <li><span>1</span><div>After approval, the live page stays open. This setup panel collapses into a small controls strip.</div></li>
+        <li><span>2</span><div>Choose Controls or press Ctrl+Alt+B for window settings. Click-through starts off; turn it on only when you want clicks to pass to apps behind.</div></li>
+        <li><span>3</span><div>Use + / − to adjust the glass background. Your text stays clear. Test capture protection with your meeting app.</div></li>
       </ol>
       <div class="privacy-note">
         <strong>Protection has limits.</strong>

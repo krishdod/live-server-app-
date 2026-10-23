@@ -1,6 +1,6 @@
 {
   "name": "live-workspace-private-viewer",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Desktop viewer with capture exclusion for Live Workspace (Windows and macOS)",
   "author": "Live Workspace",
@@ -23,8 +23,8 @@
   "build": {
     "appId": "com.liveworkspace.privateviewer",
     "productName": "Live Workspace Viewer",
-    "directories": { "output": "dist-v5" },
-    "files": ["main.js", "policy.js", "preload.js", "home.html", "home.js", "home.css", "package.json"],
+    "directories": { "output": "dist-v8" },
+    "files": ["main.js", "policy.js", "appearance.js", "glass.css", "preload.js", "home.html", "home.js", "home.css", "package.json"],
     "win": {
       "target": [{ "target": "portable", "arch": ["x64"] }],
       "signAndEditExecutable": false
