@@ -1,6 +1,6 @@
 {
   "name": "live-workspace-private-viewer",
-  "version": "1.4.0",
+  "version": "1.5.1",
   "private": true,
   "description": "Desktop viewer with capture exclusion for Live Workspace (Windows and macOS)",
   "author": "Live Workspace",
@@ -10,6 +10,7 @@
     "test": "node --test test/*.test.js",
     "test:smoke": "electron smoke-test.js",
     "test:approval-smoke": "electron approval-smoke-test.js",
+    "test:transparency": "electron transparency-smoke-test.js",
     "pack": "electron-builder --win dir",
     "dist": "electron-builder --win portable",
     "pack:mac": "electron-builder --mac dir",
@@ -23,17 +24,51 @@
   "build": {
     "appId": "com.liveworkspace.privateviewer",
     "productName": "Live Workspace Viewer",
-    "directories": { "output": "dist-v8" },
-    "files": ["main.js", "policy.js", "appearance.js", "glass.css", "preload.js", "home.html", "home.js", "home.css", "package.json"],
+    "directories": {
+      "output": "../releases"
+    },
+    "files": [
+      "main.js",
+      "policy.js",
+      "appearance.js",
+      "glass.css",
+      "preload.js",
+      "home.html",
+      "home.js",
+      "home.css",
+      "package.json",
+      "app-icon.js"
+    ],
     "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "signAndEditExecutable": false
     },
-    "portable": { "artifactName": "LiveWorkspaceViewer-${version}-portable.exe" },
+    "portable": {
+      "artifactName": "LiveWorkspaceViewer-${version}-portable.exe"
+    },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,

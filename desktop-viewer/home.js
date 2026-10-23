@@ -102,13 +102,26 @@ function applyStatus(status) {
   document.documentElement.classList.toggle("viewer-glass", currentStatus.interactivePage === false);
   hideControlsButton.hidden = currentStatus.interactivePage !== false;
   showControlsButton.setAttribute("aria-expanded", String(!currentStatus.toolbarHidden));
-  document.querySelector(".ready-label").textContent = currentStatus.clickThrough ? "Click-through on" : "Viewer ready";
+  const readyLabel = document.querySelector(".ready-label");
+  readyLabel.textContent = currentStatus.connection === "connected" ? currentStatus.streamPaused ? "Paused" : "Connected" : "Reconnecting";
+  readyLabel.classList.toggle("waiting", currentStatus.connection !== "connected" || currentStatus.streamPaused);
+  readyLabel.title = currentStatus.streamPaused ? "The owner paused Auto Copy. Ask them to resume it." : currentStatus.clickThrough ? "Click-through is on" : "Live connection status";
+  document.getElementById("strip-opacity").textContent = `${percent}%`;
+  document.getElementById("strip-opacity").title = `Background ${percent}% · Controls to adjust`;
+  document.getElementById("copy-answer").disabled = !currentStatus.hasAnswer;
+  document.getElementById("clear-view").disabled = !currentStatus.hasAnswer;
+  document.getElementById("theme-toggle").disabled = currentStatus.interactivePage !== false;
+  const appIconCheckbox = document.getElementById("show-app-icon");
+  appIconCheckbox.checked = currentStatus.interactivePage !== false || !currentStatus.hideAppIcon;
+  appIconCheckbox.disabled = currentStatus.interactivePage !== false;
+  appIconCheckbox.setAttribute("aria-label", `Show app icon in ${currentStatus.iconLabel || "Taskbar"}`);
+  document.getElementById("app-icon-label").textContent = currentStatus.iconLabel || "Taskbar";
   if (currentStatus.toolbarHidden && !wasCollapsed && focusInPanel) showControlsButton.focus();
   if (!currentStatus.toolbarHidden && wasCollapsed && !currentStatus.interactivePage && document.activeElement === showControlsButton) hideControlsButton.focus();
 
   statusMessage.classList.remove("error-message");
   statusMessage.textContent = !currentStatus.shortcut
-    ? "Show/hide shortcut unavailable. This app stays on the taskbar/Dock."
+    ? "Show/hide shortcut unavailable. Use Controls or launch this app again to return."
     : currentStatus.message || "Open the access page to request approval.";
   statusMessage.title = [statusMessage.textContent, currentStatus.message].filter(Boolean).join(" ");
 }
@@ -159,6 +172,20 @@ showControlsButton.addEventListener("click", async () => {
   }
 });
 stripCloseButton.addEventListener("click", () => api.quit());
+document.getElementById("copy-answer").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  const result = await api.copyAnswer().catch(() => null);
+  button.textContent = result?.ok ? "Copied" : "Retry";
+  setTimeout(() => { button.textContent = "Copy"; }, 1500);
+});
+document.getElementById("clear-view").addEventListener("click", () => api.clearView().catch(() => {}));
+document.getElementById("theme-toggle").addEventListener("click", () => api.toggleTheme().catch(() => {}));
+document.getElementById("show-app-icon").addEventListener("change", async event => {
+  try {
+    const status = await api.setIconVisible(event.currentTarget.checked);
+    if (status) applyStatus(status);
+  } catch { showError("Could not change the app icon setting."); }
+});
 
 document.getElementById("reload").addEventListener("click", () => api.reload());
 hideButton.addEventListener("click", () => {

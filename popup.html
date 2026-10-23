@@ -1,60 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Live Workspace</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 300px;
-      padding: 14px;
-      font-family: "Segoe UI", system-ui, sans-serif;
-      background: #0f0f0f;
-      color: #e8eaed;
-    }
-    h1 { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 12px;
-    }
-    .label { color: #9ca3af; }
-    .value { color: #e5e7eb; text-align: right; word-break: break-all; max-width: 180px; }
-    .ok { color: #4ade80; }
-    .bad { color: #f87171; }
-    .muted { color: #6b7280; }
-    button {
-      width: 100%;
-      margin-top: 8px;
-      border: none;
-      border-radius: 8px;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      background: #1e3a5f;
-      color: #93c5fd;
-    }
-    button:hover { background: #254a75; }
-    button.secondary { background: #1a1a1a; color: #d1d5db; }
-    .hint { margin-top: 10px; font-size: 11px; color: #6b7280; line-height: 1.4; }
-  </style>
+  <link rel="stylesheet" href="popup.css">
+  <script src="popup.js" defer></script>
 </head>
 <body>
-  <h1>Live Workspace</h1>
-  <div class="row"><span class="label">Server</span><span id="server" class="value muted">—</span></div>
-  <div class="row"><span class="label">Health</span><span id="health" class="value muted">Checking…</span></div>
-  <div class="row"><span class="label">Answer delivery</span><span id="delivery" class="value muted">Waiting for an answer</span></div>
-  <div class="row"><span class="label">Last captured</span><span id="lastCaptured" class="value muted">—</span></div>
-  <div class="row"><span class="label">Viewers connected</span><span id="clients" class="value muted">—</span></div>
-  <div class="row"><span class="label">Last sent</span><span id="lastSent" class="value muted">—</span></div>
-  <div class="row"><span class="label">Queue</span><span id="queue" class="value muted">0</span></div>
-  <button id="testBtn" type="button">Test answer delivery</button>
-  <button id="wakeBtn" class="secondary" type="button">Wake server</button>
-  <p class="hint">After reloading this extension, refresh the ChatGPT tab. Open the live viewer and turn Auto Copy ON. Testing checks the key without replacing the displayed answer.</p>
-  <script src="popup.js"></script>
+  <header><span class="brand-mark" aria-hidden="true">/</span><strong>Live Workspace</strong><span class="version">5.4</span></header>
+  <main>
+    <section class="connection" aria-label="Connection status">
+      <span class="eyebrow">BROWSER → WORKSPACE</span>
+      <h1 id="health" class="value muted" role="status">Checking connection…</h1>
+      <p id="delivery" role="status">Waiting for an answer</p>
+      <p id="server" class="server">—</p>
+    </section>
+    <dl class="metrics">
+      <div><dt>Last captured</dt><dd id="lastCaptured">—</dd></div>
+      <div><dt>Last delivered</dt><dd id="lastSent">—</dd></div>
+      <div><dt>Connected clients</dt><dd id="clients">—</dd></div>
+      <div><dt>Queued answer</dt><dd id="queue">0</dd></div>
+    </dl>
+    <div class="actions"><button id="testBtn" type="button">Test delivery</button><button id="wakeBtn" class="secondary" type="button">Reconnect</button></div>
+    <details id="settings">
+      <summary>Connection settings</summary>
+      <form id="connectionForm" autocomplete="off">
+        <label for="serverInput">Server address</label>
+        <input id="serverInput" type="url" required spellcheck="false" placeholder="https://live-server-app.onrender.com">
+        <label for="keyInput">Publishing key</label>
+        <input id="keyInput" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste STREAM_KEY from Render">
+        <p class="hint">Use the service’s STREAM_KEY. Owner keys and request codes do not publish answers. Leave blank to keep the saved key for this server.</p>
+        <button id="saveConnection" type="submit">Save connection</button>
+        <p id="settingsNotice" class="hint" role="status" aria-live="polite"></p>
+      </form>
+    </details>
+    <footer>After updating the extension, refresh ChatGPT and ask a new question. The viewer needs owner approval and Auto Copy on.</footer>
+  </main>
 </body>
 </html>

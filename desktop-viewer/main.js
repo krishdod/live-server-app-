@@ -4,6 +4,7 @@ const os = require("node:os");
 const { pathToFileURL } = require("node:url");
 const { normalizeViewerUrl, allowedNavigation, isReadyViewer, supportsCaptureExclusion } = require("./policy");
 const { createAppearance, DEFAULT_BACKGROUND_OPACITY } = require("./appearance");
+const { createAppIcon } = require("./app-icon");
 
 const HEADER_HEIGHT = 176;
 const COMPACT_HEADER_HEIGHT = 128;
@@ -17,7 +18,7 @@ const TOOLBAR_SHORTCUT = "Control+Alt+B";
 const OPACITY_STEP = 0.05;
 const MIN_OPACITY = 0.2;
 const MAX_OPACITY = 1;
-const CHANNELS = ["status", "open", "reload", "hide", "quit", "pin", "opacity", "clickThrough", "pointer", "linkBar", "toolbar"]
+const CHANNELS = ["status", "open", "reload", "hide", "quit", "pin", "opacity", "clickThrough", "pointer", "linkBar", "toolbar", "copy", "clear", "theme", "icon"]
   .map(name => `viewer:${name}`);
 
 function createViewer(electron, options = {}) {
@@ -33,6 +34,7 @@ function createViewer(electron, options = {}) {
   let clickThroughShortcut = false;
   let toolbarShortcut = false;
   let pinned = true;
+  let hideAppIcon = true;
   let opacity = DEFAULT_BACKGROUND_OPACITY;
   let clickThrough = false;
   let interactivePage = true;
@@ -41,6 +43,10 @@ function createViewer(electron, options = {}) {
   let toolbarHidden = false;
   let headerHeight = HEADER_HEIGHT;
   let pointerPoll = null;
+  let statusPoll = null;
+  let connection = "connecting";
+  let hasAnswer = false;
+  let streamPaused = false;
   let view = null;
   let viewerUrl = "";
   let loadGeneration = 0;
@@ -50,16 +56,29 @@ function createViewer(electron, options = {}) {
   const win = new BrowserWindow({
     title: "Live Workspace Viewer", width: 880, height: 680,
     minWidth: 560, minHeight: 410, show: false, alwaysOnTop: true,
-    skipTaskbar: false, backgroundColor: "#10151d", autoHideMenuBar: true,
-    transparent: true, frame: false,
+    skipTaskbar: false, backgroundColor: "#00000000", autoHideMenuBar: true,
+    transparent: true, frame: false, backgroundMaterial: "none",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
-      webSecurity: true, devTools: false
+      webSecurity: true, devTools: false, transparent: true
     }
   });
   win.setMenu(null);
   const appearance = createAppearance(win, options.platform ?? process.platform, options.release ?? os.release());
+  const platform = options.platform ?? process.platform;
+  const appIcon = createAppIcon(win, app, platform, {
+    onChange: () => report(message),
+    onError: () => report("Could not change the app icon. Use Controls or launch the app again to return.")
+  });
+  function applyAppIcon() { appIcon.setVisible(interactivePage || !hideAppIcon); }
+  function setIconVisible(value) {
+    if (interactivePage) return snapshot();
+    hideAppIcon = value !== true;
+    report(hideAppIcon ? "Hiding the taskbar/Dock icon. The viewer stays open; Ctrl+Alt+V or launching it again brings it back." : "Showing the taskbar/Dock icon.");
+    applyAppIcon();
+    return snapshot();
+  }
 
   function applyPinned() {
     // screen-saver level keeps the window above normal apps, similar to PowerToys Always on Top.
@@ -119,13 +138,64 @@ function createViewer(electron, options = {}) {
     return {
       protection: protectedContent, supported, shortcut, pinShortcut,
       opacityUpShortcut, opacityDownShortcut, clickThroughShortcut, toolbarShortcut,
-      pinned, opacity: interactivePage ? 1 : opacity,
+      pinned, opacity: interactivePage ? 1 : opacity, connection, hasAnswer, streamPaused,
+      hideAppIcon, iconHidden: !appIcon.isVisible(), iconLabel: platform === "darwin" ? "Dock" : "Taskbar",
       clickThrough: !interactivePage && clickThrough, interactivePage, linkHidden, toolbarHidden, headerHeight, message
     };
   }
   function report(text) {
     message = text;
     if (!closed && !win.webContents.isDestroyed()) win.webContents.send("viewer:status-changed", snapshot());
+  }
+  function stopStatusPoll() {
+    if (statusPoll) clearInterval(statusPoll);
+    statusPoll = null;
+  }
+  function startStatusPoll() {
+    stopStatusPoll();
+    const wc = view?.webContents;
+    if (!wc || typeof wc.executeJavaScript !== "function") return;
+    let polling = false;
+    const check = async () => {
+      if (polling || interactivePage || closed || wc.isDestroyed()) return;
+      polling = true;
+      try {
+        const status = await wc.executeJavaScript(`(() => ({
+          connection: document.querySelector('#status')?.classList.contains('connected') ? 'connected' : 'reconnecting',
+          hasAnswer: Boolean(document.querySelector('#answer')?.textContent.trim()),
+          paused: document.querySelector('#autoCopyBtn')?.textContent.includes('OFF') === true
+        }))()`);
+        if (!closed && !interactivePage && view?.webContents === wc) {
+          const changed = connection !== status.connection || hasAnswer !== status.hasAnswer || streamPaused !== status.paused;
+          connection = status.connection;
+          hasAnswer = status.hasAnswer;
+          streamPaused = status.paused;
+          if (changed) report(message);
+        }
+      } catch { /* Navigation owns the next status update. */ }
+      finally { polling = false; }
+    };
+    statusPoll = setInterval(check, 1500);
+    statusPoll.unref?.();
+    void check();
+  }
+  async function copyAnswer() {
+    if (interactivePage || !view || closed) return { ok: false };
+    try {
+      const text = await view.webContents.executeJavaScript(`typeof getAnswerPlainText === 'function' ? getAnswerPlainText() : document.querySelector('#answer')?.innerText || ''`);
+      if (typeof text !== "string" || !text.trim()) return { ok: false, error: "Waiting for an answer." };
+      electron.clipboard.writeText(text);
+      return { ok: true };
+    } catch { return { ok: false, error: "Could not copy. Select the answer text and copy it." }; }
+  }
+  async function clearView() {
+    if (interactivePage || !view || closed) return { ok: false };
+    try {
+      await view.webContents.executeJavaScript(`document.querySelector('#answer')?.replaceChildren()`);
+      hasAnswer = false;
+      report("View cleared. The next answer appears automatically. Reload brings back the current answer.");
+      return { ok: true };
+    } catch { return { ok: false }; }
   }
   function applyProtection() {
     if (!supported) return false;
@@ -146,13 +216,13 @@ function createViewer(electron, options = {}) {
       view = null;
       showInteractivePage("Capture protection could not be restored. Reopen the app before connecting.");
     }
-    win.setSkipTaskbar(false);
     applyPinned();
     applyOpacity();
     applyClickThrough();
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
+    applyAppIcon();
   }
   function hide() {
     if (shortcut && !closed) win.hide();
@@ -245,10 +315,10 @@ function createViewer(electron, options = {}) {
       });
     } catch { toolbarShortcut = false; }
   }
-  // Keep the app discoverable; hiding is always an explicit user action.
-  win.setSkipTaskbar(false);
+  // Approval forms stay discoverable. Only the ready viewer hides its icon.
+  applyAppIcon();
   if (!shortcut && protectedContent) {
-    message = "Ctrl+Alt+V is unavailable. The viewer will stay on the taskbar/Dock.";
+    message = "Ctrl+Alt+V is unavailable. Use the visible Controls or launch the app again to return.";
   }
 
   // Separate in-memory sessions prevent site storage/cookies crossing servers
@@ -274,6 +344,9 @@ function createViewer(electron, options = {}) {
   win.on("resize", resizeView);
 
   function showInteractivePage(text) {
+    stopStatusPoll();
+    connection = "connecting";
+    hasAnswer = false;
     interactivePage = true;
     toolbarHidden = false;
     syncHeaderHeight();
@@ -287,6 +360,7 @@ function createViewer(electron, options = {}) {
       if (win.isMinimized()) win.restore();
       win.show();
     }
+    applyAppIcon();
     report(text || "Complete approval or sign-in below. This page stays visible and clickable.");
   }
 
@@ -302,10 +376,12 @@ function createViewer(electron, options = {}) {
     pointerOverToolbar = true;
     applyClickThrough();
     refreshPointerPoll();
+    startStatusPoll();
     if (options.showWindow !== false && !closed) {
       if (win.isMinimized()) win.restore();
       win.show();
     }
+    applyAppIcon();
     report("Access approved. Your live viewer is open. Choose Controls for window settings.");
   }
 
@@ -335,7 +411,7 @@ function createViewer(electron, options = {}) {
     const nextView = new WebContentsView({ webPreferences: {
       session: viewerSession, nodeIntegration: false, contextIsolation: true,
       sandbox: true, webSecurity: true, devTools: false,
-      allowRunningInsecureContent: false, backgroundThrottling: false
+      allowRunningInsecureContent: false, backgroundThrottling: false, transparent: true
     } });
     view = nextView;
     const wc = nextView.webContents;
@@ -408,6 +484,14 @@ function createViewer(electron, options = {}) {
   handle("pointer", setPointerOverToolbar);
   handle("linkBar", setLinkBarVisible);
   handle("toolbar", setToolbarVisible);
+  handle("icon", setIconVisible);
+  handle("copy", copyAnswer);
+  handle("clear", clearView);
+  handle("theme", async () => {
+    if (interactivePage || !view || closed) return { ok: false };
+    try { await view.webContents.executeJavaScript(`document.querySelector('#themeBtn')?.click()`); return { ok: true }; }
+    catch { return { ok: false }; }
+  });
   win.webContents.on("did-finish-load", () => report(message));
   win.once("ready-to-show", () => {
     if (options.showWindow !== false && !closed) win.show();
@@ -416,7 +500,9 @@ function createViewer(electron, options = {}) {
     closed = true;
     loadGeneration++;
     stopPointerPoll();
+    stopStatusPoll();
     appearance.dispose();
+    appIcon.dispose();
     if (view && !view.webContents.isDestroyed()) view.webContents.close();
     if (shortcut) globalShortcut.unregister(TOGGLE_SHORTCUT);
     if (pinShortcut) globalShortcut.unregister(PIN_SHORTCUT);
@@ -430,7 +516,7 @@ function createViewer(electron, options = {}) {
   return {
     window: win, snapshot, openViewer, hide, restore, setPinned, togglePinned,
     adjustOpacity, setClickThrough, toggleClickThrough, setPointerOverToolbar,
-    setLinkBarVisible, setToolbarVisible, getView: () => view, getOpacity: () => opacity,
+    setLinkBarVisible, setToolbarVisible, setIconVisible, getView: () => view, getOpacity: () => opacity,
     getHeaderHeight: () => headerHeight
   };
 }
@@ -441,6 +527,7 @@ function start() {
   if (!app.requestSingleInstanceLock()) { app.quit(); return; }
   let controller;
   app.on("second-instance", () => controller?.restore());
+  app.on("activate", () => controller?.restore());
   app.whenReady().then(() => { controller = createViewer(electron); });
   app.on("window-all-closed", () => app.quit());
 }

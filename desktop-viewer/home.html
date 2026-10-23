@@ -10,16 +10,18 @@
 </head>
 <body>
   <div class="viewer-strip" role="toolbar" aria-label="Viewer controls">
-    <div class="strip-heading"><strong>Live Workspace</strong><span class="ready-label" role="status">Viewer ready</span></div>
+    <div class="strip-heading"><span class="app-mark" aria-hidden="true"></span><strong>Workspace</strong><span class="ready-label" role="status">Connecting</span><span id="strip-opacity" title="Background opacity">65%</span></div>
     <div class="strip-actions">
+      <button id="copy-answer" type="button" disabled title="Copy the answer as text">Copy</button>
+      <button id="clear-view" type="button" disabled title="Clear this window only; the next answer appears automatically">Clear</button>
       <button id="show-controls" type="button" aria-expanded="false" aria-keyshortcuts="Control+Alt+B" title="Window settings (Ctrl+Alt+B)">Controls</button>
-      <button id="strip-close" type="button" title="Close the viewer">Close</button>
+      <button id="strip-close" type="button" title="End this viewing session">End</button>
     </div>
   </div>
   <header class="toolbar">
     <div class="heading-row">
       <h1>Live Workspace <span>Viewer</span></h1>
-      <span id="protection" class="protection pending" role="status">Checking protection…</span>
+      <div class="header-tools"><label class="pin-control" title="Show the app icon in the taskbar or Dock"><input id="show-app-icon" type="checkbox" checked disabled><span id="app-icon-label">Taskbar</span></label><button id="theme-toggle" type="button" disabled title="Switch between dark and light reading themes">Theme</button><span id="protection" class="protection pending" role="status">Checking protection…</span></div>
     </div>
 
     <form id="open-form" class="address-row" autocomplete="off">
@@ -31,7 +33,7 @@
     <div class="controls-row">
       <div class="control-group">
         <label class="pin-control" title="Keep this window above other apps (Ctrl+Alt+T)">
-          <input id="pin" type="checkbox" checked> Always on Top
+          <input id="pin" type="checkbox" checked> Pin on top
         </label>
         <label class="pin-control" title="Click apps behind this window (Ctrl+Alt+C)">
           <input id="click-through" type="checkbox"> Click-through

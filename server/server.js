@@ -813,10 +813,13 @@ wss.on("connection", (ws, req) => {
       ws.close(1008, "Access expired or revoked");
       return;
     }
-    if (ws.role !== "edit") return;
-
     try {
       const msg = JSON.parse(String(raw));
+      if (msg.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong" }));
+        return;
+      }
+      if (ws.role !== "edit") return;
 
       if (msg.type === "sync" && typeof msg.text === "string") {
         if (msg.text.length > MAX_SYNC_CHARS) return;

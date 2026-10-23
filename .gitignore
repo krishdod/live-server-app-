@@ -6,9 +6,8 @@ caption-copier-fix/build/
 caption-copier-fix/dist/
 desktop-viewer/dist/
 desktop-viewer/dist-*/
-artifacts/approval-baseline/
-artifacts/approval-checks/
-artifacts/website-checks/
+artifacts/
+releases/
 desktop-viewer/smoke-result.json
 __pycache__/
 .env

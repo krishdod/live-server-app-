@@ -39,7 +39,8 @@ function harness({ protection = true, shortcut = true, toolbarShortcut = shortcu
     constructor(options) {
       super(); this.options = options; this.webContents = new Contents();
       this.visible = false; this.children = [];
-      this.contentView = { addChildView: v => this.children.push(v), removeChildView: v => this.children.splice(this.children.indexOf(v), 1) };
+      this.contentView = { addChildView: v => this.children.push(v), removeChildView: v => this.children.splice(this.children.indexOf(v), 1),
+        setBackgroundColor: value => { this.rootBackground = value; } };
     }
     setMenu() {}
     setContentProtection(on) { events.push(['protect', on]); }
@@ -48,6 +49,7 @@ function harness({ protection = true, shortcut = true, toolbarShortcut = shortcu
     setAlwaysOnTop(value) { this.pinned = value; }
     setOpacity(value) { this.opacity = value; }
     setBackgroundColor(value) { this.backgroundColor = value; }
+    setBackgroundMaterial(value) { this.material = value; events.push(['material', value]); }
     setIgnoreMouseEvents(ignore, options) {
       this.ignoreMouse = ignore;
       this.ignoreMouseOptions = options || null;
@@ -224,7 +226,7 @@ test('hide shortcut remains registered while hidden and second invocation restor
   assert.equal(c.window.visible, true);
 });
 
-test('approval keeps the viewer visible, on the taskbar, and clickable by default', async () => {
+test('approval keeps the viewer visible and clickable while removing its taskbar icon', async () => {
   const c = harness();
   c.window.emit('ready-to-show');
   assert.equal(c.window.visible, true);
@@ -237,9 +239,37 @@ test('approval keeps the viewer visible, on the taskbar, and clickable by defaul
   assert.deepEqual(c.getView().bounds, { x: 0, y: 44, width: 880, height: 636 });
   assert.equal(c.snapshot().clickThrough, false);
   assert.equal(c.window.ignoreMouse, false);
-  assert.equal(c.window.skipTaskbar, false);
+  assert.equal(c.window.skipTaskbar, true);
+  assert.equal(c.snapshot().iconHidden, true);
   assert.match(c.snapshot().message, /approved/i);
   assert.equal(c.window.visible, true);
+});
+
+test('the taskbar preference survives restoring the window and revocation shows the icon', async () => {
+  const c = harness();
+  await c.openViewer('https://example.com/?role=view');
+  c.restore();
+  assert.equal(c.window.skipTaskbar, true, 'restoring the window does not restore a hidden icon');
+  c.setIconVisible(true);
+  assert.equal(c.window.skipTaskbar, false);
+  c.restore();
+  assert.equal(c.window.skipTaskbar, false);
+  c.setIconVisible(false);
+  const wc = c.getView().webContents;
+  wc.setPageTitle('Live Workspace — Access required');
+  assert.equal(c.window.skipTaskbar, false, 'revocation makes the approval screen discoverable');
+  wc.setPageTitle('Live Workspace — Ready');
+  assert.equal(c.window.skipTaskbar, true, 'reapproval restores the chosen icon preference');
+  assert.equal(c.window.visible, true);
+});
+
+test('the icon setting is available only to the trusted local toolbar', async () => {
+  const c = harness();
+  await c.openViewer('https://example.com/?role=view');
+  const call = c.handlers.get('viewer:icon');
+  assert.throws(() => call({ sender: {}, senderFrame: {} }, true));
+  call({ sender: c.window.webContents, senderFrame: c.window.webContents.mainFrame }, true);
+  assert.equal(c.window.skipTaskbar, false);
 });
 
 test('click-through passes mouse to apps behind unless the pointer is over the toolbar', async () => {
@@ -307,21 +337,26 @@ test('always on top pin shortcut toggles the pinned state', () => {
 test('opacity shortcuts change only the background and never fade foreground text', async () => {
   const c = harness();
   await c.openViewer('https://example.com/?role=view');
-  assert.equal(c.snapshot().opacity, 0.75);
+  assert.equal(c.snapshot().opacity, 0.65);
   assert.equal(c.window.opacity, 1);
   assert.equal(c.window.options.transparent, true);
   assert.equal(c.window.options.frame, false);
+  assert.equal(c.window.options.backgroundColor, '#00000000');
+  assert.equal(c.window.options.backgroundMaterial, 'none');
+  assert.equal(c.window.rootBackground, '#00000000');
+  assert.equal(c.window.material, 'none');
+  assert.equal(c.getView().options.webPreferences.transparent, true);
   assert.equal(c.window.backgroundColor, '#00000000');
   assert.equal(c.getView().backgroundColor, '#00000000');
   c.shortcuts.opacityDown();
-  assert.equal(c.getOpacity(), 0.7);
+  assert.equal(c.getOpacity(), 0.6);
   assert.equal(c.window.opacity, 1);
   await new Promise(setImmediate);
   const styles = [...c.getView().webContents.styles.values()];
   assert.equal(styles.length, 1, 'rapid updates retain only the latest stylesheet');
-  assert.match(styles[0], /rgba\(24, 26, 30, 0\.7\)/);
+  assert.match(styles[0], /rgba\(24, 26, 30, 0\.6\)/);
   c.shortcuts.opacityUp();
-  assert.equal(c.getOpacity(), 0.75);
+  assert.equal(c.getOpacity(), 0.65);
   for (let i = 0; i < 30; i++) c.shortcuts.opacityUp();
   assert.equal(c.getOpacity(), 1);
   for (let i = 0; i < 30; i++) c.shortcuts.opacityDown();
@@ -329,12 +364,14 @@ test('opacity shortcuts change only the background and never fade foreground tex
   c.shortcuts.opacityUp();
   assert.equal(c.getOpacity(), 0.25);
   assert.equal(c.window.opacity, 1);
+  assert.equal(c.events.some(e => e[0] === 'material' && e[1] !== 'none'), false,
+    'the system never paints a backdrop beneath the translucent surface');
 });
 
 test('approval and revoked pages stay solid and stale glass updates cannot recolor them', async () => {
   const c = harness();
   await c.openViewer('https://example.com/access');
-  assert.equal(c.window.backgroundColor, '#10151d');
+  assert.equal(c.window.backgroundColor, '#00000000');
   assert.equal(c.getView().backgroundColor, '#10151d');
   assert.equal(c.getView().webContents.styles.size, 0);
   const wc = c.getView().webContents;
@@ -343,7 +380,7 @@ test('approval and revoked pages stay solid and stale glass updates cannot recol
   c.adjustOpacity(-0.1);
   wc.setPageTitle('Live Workspace — Access required');
   await new Promise(setImmediate);
-  assert.equal(c.window.backgroundColor, '#10151d');
+  assert.equal(c.window.backgroundColor, '#00000000');
   assert.equal(c.getView().backgroundColor, '#10151d');
   assert.equal(wc.styles.size, 0);
   assert.equal(c.window.opacity, 1);
@@ -397,7 +434,7 @@ test('revocation restores interactive mode and preserves overlay preferences aft
   assert.equal(c.snapshot().interactivePage, true, 'ready title cannot turn an approval page into an overlay');
   wc.navigate('https://example.com/?role=view');
   wc.setPageTitle('Live Workspace — Ready');
-  assert.equal(c.getOpacity(), 0.4);
+  assert.equal(c.getOpacity(), 0.3);
   assert.equal(c.window.opacity, 1, 'reapproval restores surface alpha without fading text');
   assert.equal(c.snapshot().clickThrough, false, 'preserve manually disabled click-through');
   assert.equal(c.snapshot().toolbarHidden, true);

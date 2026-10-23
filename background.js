@@ -1,8 +1,12 @@
-importScripts("config.js");
+// A downloaded extension can be configured from its popup without a secret file.
+try { importScripts("config.js"); } catch { /* Connection settings are available in the popup. */ }
 
-const BASE_URL = SERVER_URL.replace(/\/+$/, "");
-const HTTP_ENDPOINT = `${BASE_URL}/answer`;
-const HEALTH_ENDPOINT = `${BASE_URL}/health`;
+const DEFAULT_SERVER = "https://live-server-app.onrender.com";
+let BASE_URL = (typeof SERVER_URL === "string" ? SERVER_URL : DEFAULT_SERVER).replace(/\/+$/, "");
+let publishingKey = typeof STREAM_KEY === "string" ? STREAM_KEY : "";
+let HTTP_ENDPOINT = `${BASE_URL}/answer`;
+let HEALTH_ENDPOINT = `${BASE_URL}/health`;
+const SETTINGS_KEY = "relaySettings";
 const REQUEST_TIMEOUT_MS = 12000;
 const STORAGE_KEY = "relayDelivery";
 const RETRY_ALARM = "retry-relay-delivery";
@@ -16,17 +20,39 @@ let pendingAnswer = null;
 let flushPromise = null;
 let healthPromise = null;
 let savePromise = Promise.resolve();
+let settingsChange = null;
+let reconfiguring = false;
+const activeRequests = new Set();
+
+function connectionOrigin(raw) {
+  const url = new URL(String(raw).trim());
+  const local = ["localhost", "127.0.0.1"].includes(url.hostname) && url.port === "8765";
+  const render = url.protocol === "https:" && url.hostname.endsWith(".onrender.com");
+  if ((!local && !render) || !["http:", "https:"].includes(url.protocol) || url.username || url.password ||
+      url.pathname !== "/" || url.search || url.hash) throw new Error("Use your Render address without /access, or http://localhost:8765.");
+  return url.origin;
+}
 
 // Updates are full snapshots; keep only the newest unsent answer.
 // Persist it because Chrome can stop the worker between retries.
-const ready = chrome.storage.local.get(STORAGE_KEY).then((data) => {
+const ready = (async () => {
+  const settings = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY];
+  if (settings) {
+    try {
+      BASE_URL = connectionOrigin(settings.server);
+      publishingKey = typeof settings.key === "string" ? settings.key : "";
+      HTTP_ENDPOINT = `${BASE_URL}/answer`;
+      HEALTH_ENDPOINT = `${BASE_URL}/health`;
+    } catch { /* Invalid saved settings do not override the bundled configuration. */ }
+  }
+  const data = await chrome.storage.local.get(STORAGE_KEY);
   const saved = data[STORAGE_KEY];
   if (!saved || saved.server !== BASE_URL) return;
   pendingAnswer = typeof saved.pendingAnswer?.text === "string" ? saved.pendingAnswer : null;
   lastSentAt = saved.lastSentAt || 0;
   lastCapturedAt = saved.lastCapturedAt || 0;
   lastDelivery = saved.lastDelivery || null;
-});
+})();
 
 function saveState() {
   const state = { server: BASE_URL, pendingAnswer, lastSentAt, lastCapturedAt, lastDelivery };
@@ -57,21 +83,21 @@ async function wakeServer(force = false) {
 }
 
 function deliveryError(status) {
-  if (status === 401 || status === 403) return "Key rejected. Match STREAM_KEY in config.js with the server.";
-  if (status === 404) return "Answer endpoint missing. Check SERVER_URL in config.js.";
+  if (status === 401 || status === 403) return "Key rejected. Update the publishing key in Connection settings.";
+  if (status === 404) return "Answer endpoint missing. Check the server address in Connection settings.";
   if (status === 413) return "Answer is too large for the server.";
   if (status === 429) return "Server busy. The latest answer is queued.";
   return status ? `Delivery failed (HTTP ${status}).` : "Server unreachable or waking up. The latest answer is queued.";
 }
 
-async function requestDelivery(payload) {
+async function deliver(payload) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(HTTP_ENDPOINT, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, key: STREAM_KEY || "" }),
-      signal: controller.signal
+      body: JSON.stringify({ ...payload, key: publishingKey }),
+      signal: controller.signal, redirect: "error"
     });
     return {
       sent: response.ok, status: response.status,
@@ -83,8 +109,15 @@ async function requestDelivery(payload) {
   } finally { clearTimeout(timer); }
 }
 
+async function requestDelivery(payload) {
+  const request = deliver(payload);
+  activeRequests.add(request);
+  try { return await request; } finally { activeRequests.delete(request); }
+}
+
 async function flushQueue(force = false) {
   await ready;
+  if (reconfiguring) return { sent: false, retryable: true, error: "Updating connection settings…" };
   if (flushPromise) return flushPromise;
   if (!pendingAnswer) return { sent: true, idle: true };
   if (!force && lastDelivery?.retryable === false && !lastDelivery.sent) return lastDelivery;
@@ -109,6 +142,7 @@ async function flushQueue(force = false) {
 
 async function queueAnswer(text) {
   await ready;
+  if (reconfiguring) await settingsChange;
   lastCapturedAt = Date.now();
   pendingAnswer = { text, capturedAt: lastCapturedAt };
   await saveState();
@@ -117,19 +151,49 @@ async function queueAnswer(text) {
 
 async function getStatus() {
   await ready;
+  if (reconfiguring) await settingsChange;
   return {
-    server: BASE_URL, health: await wakeServer(), delivery: lastDelivery,
+    server: BASE_URL, keyConfigured: Boolean(publishingKey), health: await wakeServer(), delivery: lastDelivery,
     lastCapturedAt, lastSentAt, queueSize: pendingAnswer ? 1 : 0
   };
 }
 
 async function testDelivery() {
   await ready;
+  if (reconfiguring) await settingsChange;
   // Omitting text checks the key without replacing the viewer's answer.
   const result = await requestDelivery({ check: true });
   lastDelivery = { ...result, checkedAt: Date.now(), checkOnly: true };
   await saveState();
   return result;
+}
+
+async function updateConnection(message) {
+  await ready;
+  const server = connectionOrigin(message.server);
+  const changedServer = server !== BASE_URL;
+  const suppliedKey = typeof message.key === "string" ? message.key.trim() : "";
+  if (suppliedKey.length > 4096) throw new Error("The publishing key is too long.");
+  if (changedServer && !suppliedKey) throw new Error("Enter the publishing key for the new server.");
+  reconfiguring = true;
+  try {
+    if (healthPromise) await healthPromise;
+    if (flushPromise) await flushPromise;
+    await Promise.allSettled([...activeRequests]);
+    const key = suppliedKey || publishingKey;
+    // Persist first: a storage failure must leave the active connection intact.
+    await chrome.storage.local.set({ [SETTINGS_KEY]: { server, key } });
+    BASE_URL = server;
+    publishingKey = key;
+    HTTP_ENDPOINT = `${BASE_URL}/answer`;
+    HEALTH_ENDPOINT = `${BASE_URL}/health`;
+    if (changedServer) { pendingAnswer = null; lastCapturedAt = 0; lastSentAt = 0; }
+    lastDelivery = null;
+    lastWakeAt = 0;
+    lastHealth = { ok: false };
+    await saveState();
+    return { ok: true, server, keyConfigured: Boolean(key), needsNewAnswer: changedServer };
+  } finally { reconfiguring = false; }
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -139,7 +203,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return;
   }
   if (msg?.type === "status") task = getStatus();
-  else if (msg?.type === "wake") task = wakeServer(Boolean(msg.force));
+  else if (msg?.type === "save-connection") {
+    if (_sender.url !== chrome.runtime.getURL("popup.html")) {
+      sendResponse({ ok: false, error: "Open the extension popup to change connection settings." });
+      return;
+    }
+    if (settingsChange) task = Promise.resolve({ ok: false, error: "Connection settings are already saving." });
+    else {
+      settingsChange = updateConnection(msg);
+      task = settingsChange.catch(error => ({ ok: false, error: error.message })).finally(() => { settingsChange = null; });
+    }
+  }
+  else if (msg?.type === "wake") task = ready.then(async () => { if (reconfiguring) await settingsChange; return wakeServer(Boolean(msg.force)); });
   else if (msg?.type === "test-delivery") task = testDelivery();
   else if (msg?.type === "answer" && typeof msg.text === "string") task = queueAnswer(msg.text);
   else return;

@@ -37,7 +37,7 @@ async function settle() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-function createWorker({ disk = {}, answer = async () => response(200) } = {}) {
+function createWorker({ disk = {}, answer = async () => response(200), configPresent = true } = {}) {
   const requests = [];
   const warnings = [];
   const alarms = [];
@@ -48,9 +48,9 @@ function createWorker({ disk = {}, answer = async () => response(200) } = {}) {
   let activePosts = 0;
   let maxActivePosts = 0;
   const context = vm.createContext({
-    SERVER_URL: SERVER + "/",
-    STREAM_KEY: KEY,
-    importScripts(filename) { assert.equal(filename, "config.js"); },
+    ...(configPresent ? { SERVER_URL: SERVER + "/", STREAM_KEY: KEY } : {}),
+    importScripts(filename) { assert.equal(filename, "config.js"); if (!configPresent) throw new Error("No bundled config"); },
+    URL,
     AbortController,
     console: { warn(...args) { warnings.push(args); } },
     setTimeout(fn) { timers.set(++timerId, fn); return timerId; },
@@ -65,6 +65,7 @@ function createWorker({ disk = {}, answer = async () => response(200) } = {}) {
         }
       },
       runtime: {
+        getURL: filename => `chrome-extension://test-extension/${filename}`,
         onMessage,
         onConnect: event(),
         onInstalled: event(),
@@ -76,12 +77,12 @@ function createWorker({ disk = {}, answer = async () => response(200) } = {}) {
       }
     },
     async fetch(url, options = {}) {
-      assert.ok(url === SERVER + "/health" || url === SERVER + "/answer");
+      assert.ok([SERVER, "https://updated-relay.onrender.com", "https://live-server-app.onrender.com"].some(base => url === base + "/health" || url === base + "/answer"));
       const request = { url, method: options.method || "GET", body: options.body ? JSON.parse(options.body) : undefined };
       requests.push(request);
       if (url.endsWith("/health")) return response(200, { ok: true, clients: 1, autoCopyEnabled: true });
       assert.equal(request.method, "POST");
-      assert.equal(request.body.key, KEY);
+      assert.equal(request.body.key, disk.relaySettings?.key ?? (configPresent ? KEY : ""));
       activePosts += 1;
       maxActivePosts = Math.max(maxActivePosts, activePosts);
       try { return await answer(request.body); } finally { activePosts -= 1; }
@@ -92,9 +93,9 @@ function createWorker({ disk = {}, answer = async () => response(200) } = {}) {
     disk, requests, warnings, alarms,
     get posts() { return requests.filter((request) => request.method === "POST"); },
     get maxActivePosts() { return maxActivePosts; },
-    async message(message) {
+    async message(message, sender = { url: "chrome-extension://test-extension/popup.html" }) {
       return new Promise((resolve, reject) => {
-        const result = onMessage.listeners[0](message, {}, (value) => resolve(structuredClone(value)));
+        const result = onMessage.listeners[0](message, sender, (value) => resolve(structuredClone(value)));
         if (result !== true && message.type !== "ping") reject(new Error("Worker did not keep the response channel open"));
       });
     },
@@ -247,4 +248,70 @@ test("queued captions are not restored to a different configured server", async 
   await settle();
   assert.equal(worker.posts.length, 0);
   assert.equal((await worker.message({ type: "status" })).queueSize, 0);
+});
+
+test("the extension starts without config.js and saves settings without exposing the key", async () => {
+  const worker = createWorker({ configPresent: false });
+  await settle();
+  assert.equal((await worker.message({ type: "status" })).server, "https://live-server-app.onrender.com");
+  const result = await worker.message({ type: "save-connection", server: "https://live-server-app.onrender.com/", key: "popup-test-key" });
+  assert.equal(result.ok, true);
+  assert.equal(result.keyConfigured, true);
+  const checked = await worker.message({ type: "test-delivery" });
+  assert.equal(checked.sent, true);
+  const status = await worker.message({ type: "status" });
+  assert.equal(JSON.stringify(status).includes("popup-test-key"), false);
+  assert.equal(JSON.stringify(result).includes("popup-test-key"), false);
+  assert.equal(worker.disk.relaySettings.key, "popup-test-key");
+});
+
+test("changing servers clears queued private answers and never reuses the old server key", async () => {
+  const worker = createWorker({ answer: async () => response(503) });
+  await settle();
+  await worker.message({ type: "answer", text: "Private answer for the previous workspace" });
+  const missingKey = await worker.message({ type: "save-connection", server: "https://updated-relay.onrender.com", key: "" });
+  assert.equal(missingKey.ok, false);
+  assert.equal(worker.disk.relayDelivery.pendingAnswer.text, "Private answer for the previous workspace");
+  const result = await worker.message({ type: "save-connection", server: "https://updated-relay.onrender.com", key: "new-test-key" });
+  assert.equal(result.ok, true);
+  await worker.retry();
+  assert.equal(worker.posts.length, 1, "old content is never forwarded to the new workspace");
+  assert.equal(worker.disk.relayDelivery.pendingAnswer, null);
+  await worker.message({ type: "test-delivery" });
+  assert.equal(worker.posts.at(-1).url, "https://updated-relay.onrender.com/answer");
+  assert.equal(worker.posts.at(-1).body.key, "new-test-key");
+});
+
+test("connection settings wait for an in-flight delivery before changing destination", async () => {
+  const pending = deferred();
+  const worker = createWorker({ answer: () => pending.promise });
+  await settle();
+  const delivery = worker.message({ type: "answer", text: "Already being delivered" });
+  await settle();
+  const saving = worker.message({ type: "save-connection", server: "https://updated-relay.onrender.com", key: "next-key" });
+  await settle();
+  assert.equal(worker.disk.relaySettings, undefined);
+  pending.resolve(response(204));
+  await delivery;
+  assert.equal((await saving).ok, true);
+  assert.equal(worker.posts[0].url, SERVER + "/answer");
+  assert.equal(worker.posts[0].body.key, KEY);
+  assert.equal(worker.disk.relaySettings.server, "https://updated-relay.onrender.com");
+});
+
+test("connection settings reject paths, credentials and destinations without extension permission", async () => {
+  const worker = createWorker();
+  await settle();
+  for (const server of ["https://updated-relay.onrender.com/access", "https://secret@updated-relay.onrender.com", "http://updated-relay.onrender.com", "https://elsewhere.invalid", "http://localhost:9000"]) {
+    assert.equal((await worker.message({ type: "save-connection", server, key: "test-key" })).ok, false);
+  }
+  assert.equal(worker.disk.relaySettings, undefined);
+});
+
+test("a website content script cannot change the publishing destination", async () => {
+  const worker = createWorker();
+  await settle();
+  const result = await worker.message({ type: "save-connection", server: "https://updated-relay.onrender.com", key: "test-key" }, { url: "https://chatgpt.com/" });
+  assert.equal(result.ok, false);
+  assert.equal(worker.disk.relaySettings, undefined);
 });

@@ -79,7 +79,8 @@ app.whenReady().then(async () => {
   // Simulate shortcuts; never reserve the user's keyboard shortcuts.
   const shortcuts = new Map();
   const taskbarStates = [];
-  viewer = createViewer({ ...require("electron"), BrowserWindow: function (options) {
+  const copiedAnswers = [];
+  viewer = createViewer({ ...require("electron"), clipboard: { writeText: text => copiedAnswers.push(text) }, BrowserWindow: function (options) {
     const win = new BrowserWindow(options);
     const setSkipTaskbar = win.setSkipTaskbar.bind(win);
     win.setSkipTaskbar = value => { taskbarStates.push(value); setSkipTaskbar(value); };
@@ -136,7 +137,7 @@ app.whenReady().then(async () => {
   async function glassAlpha() {
     return page.executeJavaScript(`Number(getComputedStyle(document.body).backgroundColor.match(/[\\d.]+/g)?.[3] ?? 1)`);
   }
-  await until(async () => await glassAlpha() === 0.75, "glass background applied to approved page");
+  await until(async () => await glassAlpha() === 0.65, "glass background applied to approved page");
   assert.equal(viewer.window.getOpacity(), 1, "native window opacity never fades text");
   assert.equal(await page.executeJavaScript(`getComputedStyle(document.documentElement).backgroundColor`), 'rgba(0, 0, 0, 0)');
   assert.equal(await page.executeJavaScript(`getComputedStyle(document.querySelector('#answer')).opacity`), '1');
@@ -146,18 +147,23 @@ app.whenReady().then(async () => {
   assert.equal(viewer.getView().getBounds().y, 44);
   assert.equal(viewer.getView().getBounds().height, viewer.window.getContentSize()[1] - 44);
   assert.equal(hideCalls, 0, "approval never hides the native window, even with the hide shortcut available");
-  assert.equal(taskbarStates.at(-1), false, "native taskbar visibility stays enabled");
+  assert.equal(taskbarStates.at(-1), true, "approval removes the taskbar icon without hiding the viewer");
   assert.equal(viewer.snapshot().clickThrough, false);
   await verifyPanelLayout();
   await toolbar.executeJavaScript(`document.querySelector('#show-controls').click()`);
   await until(() => toolbar.executeJavaScript(`getComputedStyle(document.querySelector('.toolbar')).display !== 'none' && document.querySelector('#open-form').hidden`), "controls shortcut restores compact panel");
   assert.equal(viewer.getView().getBounds().y, 128);
   await verifyPanelLayout();
+  await toolbar.executeJavaScript(`document.querySelector('#show-app-icon').checked = true; document.querySelector('#show-app-icon').dispatchEvent(new Event('change'))`);
+  await until(() => !viewer.snapshot().hideAppIcon && taskbarStates.at(-1) === false, "the taskbar checkbox restores the icon");
+  await toolbar.executeJavaScript(`document.querySelector('#show-app-icon').checked = false; document.querySelector('#show-app-icon').dispatchEvent(new Event('change'))`);
+  await until(() => viewer.snapshot().iconHidden && taskbarStates.at(-1) === true, "the taskbar checkbox hides the icon again");
   await toolbar.executeJavaScript(`document.querySelector('#opacity-down').click()`);
-  await until(async () => await glassAlpha() === 0.7, "background changes independently of text");
+  await until(async () => await glassAlpha() === 0.6, "background changes independently of text");
   assert.equal(viewer.window.getOpacity(), 1);
-  await page.executeJavaScript(`document.body.classList.add('theme-light')`);
-  assert.equal(await glassAlpha(), 0.7, "light mode also keeps a translucent surface");
+  await toolbar.executeJavaScript(`document.querySelector('#theme-toggle').click()`);
+  await until(() => page.executeJavaScript(`document.body.classList.contains('theme-light')`), "native theme control works");
+  assert.equal(await glassAlpha(), 0.6, "light mode also keeps a translucent surface");
   await page.executeJavaScript(`document.body.classList.remove('theme-light')`);
   await toolbar.executeJavaScript(`document.querySelector('#hide-controls').click()`);
   await until(() => viewer.snapshot().toolbarHidden, "Done hides controls without reconnecting");
@@ -170,6 +176,17 @@ app.whenReady().then(async () => {
   assert.equal(await page.executeJavaScript(`document.querySelectorAll('#answer li').length`), 2);
   assert.equal(await page.executeJavaScript(`document.querySelector('#answer strong')?.textContent`), "Live answers still arrive.");
   assert.equal(await page.executeJavaScript(`typeof require === 'undefined' && typeof process === 'undefined' && typeof viewerApi === 'undefined'`), true);
+  await until(() => viewer.snapshot().hasAnswer && viewer.snapshot().connection === "connected", "native toolbar reports actual connection and answer");
+  assert.equal(await page.executeJavaScript(`getComputedStyle(document.querySelector('.header')).display`), "none", "desktop does not show a duplicate website toolbar");
+  await toolbar.executeJavaScript(`document.querySelector('#copy-answer').click()`);
+  await until(() => copiedAnswers.length === 1, "Copy copies the streamed answer without touching the user's clipboard");
+  assert.match(copiedAnswers[0], /Live answers still arrive/);
+  await toolbar.executeJavaScript(`document.querySelector('#clear-view').click()`);
+  await until(() => page.executeJavaScript(`document.querySelector('#answer').textContent === ''`), "Clear empties only this local view");
+  const next = await fetch(`${base}/answer`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: "smoke-stream-only", text: "## Approval verified\n\n**Live answers still arrive.**\n\n- Formatting is preserved\n- Viewing requires owner approval\n- Next update after clearing" }) });
+  assert.equal(next.status, 204);
+  await until(() => page.executeJavaScript(`document.querySelectorAll('#answer li').length === 3`), "next streamed answer restores the cleared view");
   await capture(page, "viewer_approved.png");
   await until(() => ownerWindow.webContents.executeJavaScript(`Array.from(document.querySelectorAll('#requests button')).some(b => b.textContent === 'Revoke access')`), "revoke control");
   await capture(ownerWindow.webContents, "owner_dashboard.png");
@@ -177,15 +194,16 @@ app.whenReady().then(async () => {
   // Refreshing the same renderer retains the HttpOnly approval session.
   page.reload();
   await until(() => page.executeJavaScript(`document.querySelector('#answer h2')?.textContent === 'Approval verified'`), "approved reconnect retains latest answer");
-  await until(async () => await glassAlpha() === 0.7, "reconnect restores chosen glass opacity");
+  await until(async () => await glassAlpha() === 0.6, "reconnect restores chosen glass opacity");
   await ownerWindow.webContents.executeJavaScript(`Array.from(document.querySelectorAll('#requests button')).find(b => b.textContent === 'Revoke access').click();`);
   await until(() => page.getURL().includes("/access"), "revocation closes viewer");
   await until(() => page.executeJavaScript(`document.querySelector('#notice')?.textContent.includes('ended your access')`), "revoked message");
   assert.equal(await page.executeJavaScript(`document.querySelector('#answer') === null`), true);
   assert.equal(viewer.snapshot().interactivePage, true);
   assert.equal(viewer.snapshot().toolbarHidden, false);
+  assert.equal(taskbarStates.at(-1), false, "revocation restores the taskbar icon for the access screen");
   assert.equal(viewer.window.getOpacity(), 1);
-  assert.notEqual(await glassAlpha(), 0.7, "revoked access form is solid again");
+  assert.notEqual(await glassAlpha(), 0.6, "revoked access form is solid again");
   assert.equal(viewer.getView().getBounds().y, 128);
   await until(() => toolbar.executeJavaScript(`getComputedStyle(document.querySelector('.toolbar')).display !== 'none'`), "revocation restores controls");
   await capture(page, "viewer_revoked.png");
@@ -195,9 +213,11 @@ app.whenReady().then(async () => {
     liveFormattedAnswer: true, reconnectRetainsApproval: true, revokedViaDashboard: true,
     oldLinkDenied: true, rendererIsolated: true, nativeCaptureFlag: true,
     newDefaultUrl: true, approvedToolbarCollapsed: true, compactStripLayout: true,
-    approvalDoesNotHideWindow: true, taskbarDiscoverable: true, clickThroughOptIn: true,
+    approvalDoesNotHideWindow: true, approvedTaskbarIconHidden: true, taskbarSettingWorks: true,
+    revocationRestoresTaskbarIcon: true, clickThroughOptIn: true,
     controlsButtonRestoresPanel: true, keyboardFocusVisible: true, revocationRestoresPanel: true,
     narrowAndStandardPanelLayout: true,
+    nativeCopyAndLocalClear: true, nativeConnectionIndicator: true, compactReadingArea: true,
     translucentSurface: true, foregroundFullyOpaque: true,
     independentBackgroundAdjustment: true, lightThemeGlass: true,
     reloadPreservesBackground: true, solidApprovalForms: true,

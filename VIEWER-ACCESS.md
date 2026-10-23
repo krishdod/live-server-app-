@@ -83,7 +83,8 @@ paid resources. Render's free limits are documented at
 If you need to temporarily restore the previous link-based viewer access,
 explicitly set `VIEWER_APPROVAL_REQUIRED=false` and restart the server. That
 allows access with the old viewer key again; it disables owner approval.
-The previous `desktop-viewer/dist-v4` build is preserved locally.
+The current viewer package is in `releases/`. Previous build folders and
+delivery snapshots have been removed; their tracked source remains in Git history.
 
 The Windows build remains a capture-protected viewer, with the same limits as
 before. Approval controls who receives answers; it does not change which screen

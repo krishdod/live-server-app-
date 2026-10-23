@@ -89,6 +89,16 @@ async function startRelay(t) {
   return { base, connect, postAnswer };
 }
 
+test("read-only connections answer heartbeats without gaining editing permissions", async t => {
+  const relay = await startRelay(t);
+  const viewer = await relay.connect();
+  viewer.socket.send(JSON.stringify({ type: "ping" }));
+  assert.equal((await viewer.next(message => message.type === "pong")).type, "pong");
+  viewer.socket.send(JSON.stringify({ type: "sync", text: "Unauthorized edit" }));
+  const other = await relay.connect();
+  assert.equal((await other.next(message => message.type === "sync")).text, "");
+});
+
 test("ingested answers reach connected viewers and viewers joining later", async (t) => {
   const relay = await startRelay(t);
   const viewer = await relay.connect();

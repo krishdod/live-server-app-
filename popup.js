@@ -7,6 +7,11 @@ const wakeBtn = document.getElementById("wakeBtn");
 const deliveryEl = document.getElementById("delivery");
 const capturedEl = document.getElementById("lastCaptured");
 const clientsEl = document.getElementById("clients");
+const settings = document.getElementById("settings");
+const serverInput = document.getElementById("serverInput");
+const keyInput = document.getElementById("keyInput");
+const settingsNotice = document.getElementById("settingsNotice");
+let settingsLoaded = false;
 
 function setDelivery(result) {
   deliveryEl.textContent = !result ? "Waiting for an answer"
@@ -28,7 +33,12 @@ function refreshStatus() {
     }
 
     serverEl.textContent = res.server || "—";
-    serverEl.className = "value";
+    if (!settingsLoaded) {
+      serverInput.value = res.server || "https://live-server-app.onrender.com";
+      keyInput.placeholder = res.keyConfigured ? "Saved key · enter a new one to replace" : "Paste STREAM_KEY from Render";
+      settingsLoaded = true;
+      if (!res.keyConfigured || res.delivery?.status === 403) settings.open = true;
+    }
     queueEl.textContent = String(res.queueSize ?? 0);
     setDelivery(res.delivery);
     clientsEl.textContent = String(res.health?.clients ?? "—");
@@ -51,7 +61,7 @@ testBtn.addEventListener("click", () => {
   testBtn.textContent = "Testing…";
   chrome.runtime.sendMessage({ type: "test-delivery" }, (res) => {
     testBtn.disabled = false;
-    testBtn.textContent = "Test answer delivery";
+    testBtn.textContent = "Test delivery";
     if (chrome.runtime.lastError) {
       setDelivery({ sent: false, error: "Extension error. Reload the extension." });
       return;
@@ -70,4 +80,23 @@ wakeBtn.addEventListener("click", () => {
 });
 
 refreshStatus();
+document.getElementById("connectionForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const button = document.getElementById("saveConnection");
+  button.disabled = true;
+  settingsNotice.textContent = "Saving…";
+  chrome.runtime.sendMessage({ type: "save-connection", server: serverInput.value, key: keyInput.value }, result => {
+    button.disabled = false;
+    if (chrome.runtime.lastError || !result?.ok) {
+      settingsNotice.textContent = result?.error || "Could not save. Reload the extension and try again.";
+      settingsNotice.className = "hint bad";
+      return;
+    }
+    keyInput.value = "";
+    keyInput.placeholder = result.keyConfigured ? "Saved key · enter a new one to replace" : "Paste STREAM_KEY from Render";
+    settingsNotice.className = "hint ok";
+    settingsNotice.textContent = "Saved. Choose Test delivery, then ask a new question.";
+    refreshStatus();
+  });
+});
 setInterval(refreshStatus, 4000);

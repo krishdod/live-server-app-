@@ -1,225 +1,65 @@
 # Live Workspace
 
-Stream live text from your browser to a teammate in real time.
+Stream formatted answers from ChatGPT or Perplexity into an owner-approved desktop reading window.
 
-```
-Your chat page
-      ↓
-content.js detects text changes
-      ↓
-background.js POSTs to relay server
-      ↓
-Teammate sees same text live
-```
+**[Start here](START-HERE.md)** for installation, connection settings and the first successful answer.
 
-## Project structure
+## Current release
 
-```
-live-workspace/
-├── manifest.json      # Chrome extension manifest
-├── popup.html         # Extension popup (server status)
-├── popup.js
-├── content.js         # Watches the page for answer changes
-├── background.js      # Sends text to the relay server (+ wake/queue)
-├── config.js          # Server URL + STREAM_KEY (gitignored)
-├── config.example.js  # Template for config.js
-├── render.yaml        # Render deployment config
-└── server/
-    ├── server.js      # HTTP + WebSocket relay server
-    ├── viewer.html    # Live viewer page for teammates
-    └── package.json
-```
+- Windows viewer 1.5.1: compact controls, translucent reading surface, opaque text, connection status, Copy, local Clear, themes, explicit hide/show and an optional taskbar icon. The approved viewer hides its icon by default while the window stays visible.
+- Browser extension 5.4: live capture, newest-answer delivery queue, persistent connection settings and a delivery test that does not change the shared answer.
+- Node relay: formatted live updates, owner approval, revocation and recovery from stalled connections.
 
-## Requirements
+Local packages are generated in `releases/`. The Windows executable and extension ZIP are ready to use after configuration. The Mac ZIP contains source and a launcher; it is not a signed Mac installer.
 
-- Google Chrome
-- Node.js 18+ (for local server or Render deploy)
+## Connect the browser extension
 
-## Features
+1. Open `chrome://extensions`, enable Developer mode and load this folder (or the extracted extension ZIP). Reload an existing installation.
+2. Refresh the ChatGPT tab.
+3. Open the extension popup → Connection settings.
+4. Set `https://live-server-app.onrender.com` and your Render service’s `STREAM_KEY`.
+5. Save connection → Test delivery. Continue when it says Key accepted.
+6. Open the desktop viewer, request access and have the owner approve the matching code. Ask a new question to test the complete path.
 
-- Live streaming from ChatGPT / Perplexity
-- Code blocks with highlighting + Copy
-- Focus mode (full-width reading)
-- Light / Dark theme
-- Streaming / Paused badges
-- Extension popup: server health, last sent, wake/test
-- Offline queue if the server is briefly down
-- Keyboard shortcuts (viewer):
-  - `Alt+F` Focus
-  - `Alt+L` Light/Dark
-  - `Alt+C` Copy last code block
-  - `Esc` Exit focus
+Saved popup settings take precedence over optional `config.js`. Server addresses must have no page path; the app’s viewer link ends in `/access`. Publishing and owner keys have different roles. Keys are never included in generated packages.
 
-## 1. Install the Chrome extension
+## Server deployment
 
-1. Copy `config.example.js` to `config.js` and set your `SERVER_URL` / `STREAM_KEY`
-2. Open Chrome → `chrome://extensions`
-3. Enable **Developer mode**
-4. Click **Load unpacked** → select this project folder
-5. Click the extension icon to open the status popup
+Use the repository’s `server/` directory on Render. Build: `npm ci`. Start: `npm start`.
 
-## 2. Run locally (same network)
+Set a private `EDIT_KEY`, a separate `STREAM_KEY`, `VIEWER_APPROVAL_REQUIRED=true`, and `APP_ORIGIN=https://live-server-app.onrender.com`. Retain your existing optional app password and SMTP settings. Run one instance: approvals and the latest answer are currently held in memory and reset when the server restarts.
 
-### Start the server
+[Viewer access and owner setup](VIEWER-ACCESS.md) explains approval, expiry, revocation and password behavior. Local website changes require a deployment before they appear on Render.
+
+For local development, set unique test keys and run `npm start` in `server/`. The default local port is 8765.
+
+## Project layout
+
+- `background.js`, `content.js`, `page-hook.js`, `popup.*`, `manifest.json`: browser extension.
+- `server/`: relay, website, approval flow and formatting.
+- `desktop-viewer/`: Electron viewer and its native integration checks.
+- `caption-copier-fix/`: the separate caption-to-ChatGPT app, preserved with its source.
+- `scripts/package-releases.py`: builds extension and Mac-source ZIPs from current source only.
+- `tests/`: capture, transport and popup regressions.
+- `artifacts/`: ignored current test evidence; historical delivery copies have been removed.
+
+Old versioned viewer builds, duplicate Mac launchers and historical delivery bundles are removed. Their committed source is recoverable from Git history.
+
+## Checks and packages
+
+Install dependencies with `npm ci` in the project root, `server/` and `desktop-viewer/`. Then run:
 
 ```powershell
-cd server
-npm install
-npm start
+npm.cmd test
+npm.cmd test --prefix desktop-viewer
+npm.cmd run test:approval-smoke --prefix desktop-viewer
+npm.cmd run test:transparency --prefix desktop-viewer
+python caption-copier-fix/test_web_send.py
+python scripts/package-releases.py
 ```
 
-The server runs at `http://localhost:8765` (`/health` for wake checks).
+The native integration checks run local fixtures with fake credentials. They do not send content to the hosted workspace.
 
-### Configure the extension
+## Privacy and protection
 
-In `config.js`:
-
-```js
-var SERVER_URL = "http://localhost:8765";
-var STREAM_KEY = "";
-```
-
-Reload the extension at `chrome://extensions`.
-
-### Share with a teammate on the same Wi‑Fi
-
-1. Find your local IP:
-   ```powershell
-   ipconfig
-   ```
-2. Share: `http://YOUR-IP:8765`
-3. Teammate opens that link
-
-### Test
-
-1. Open ChatGPT / Perplexity and ask a question
-2. Open the viewer with **Auto Copy: ON**
-3. Text should appear live; code stays formatted
-
-## 3. Deploy to Render (remote teammates)
-
-### Push to GitHub
-
-```powershell
-git add .
-git commit -m "Deploy Live Workspace"
-git push
-```
-
-Do **not** commit `config.js` (it is gitignored).
-
-### Deploy on Render
-
-1. Sign up at [render.com](https://render.com)
-2. **New +** → **Blueprint** → connect the repo
-3. Set env vars if needed: `STREAM_KEY`, optional `EDIT_KEY` / `VIEW_KEY`, SMTP
-4. Copy your app URL
-
-### Update extension config
-
-```js
-var SERVER_URL = "https://your-app.onrender.com";
-var STREAM_KEY = "your-stream-key";
-```
-
-Reload the extension.
-
-> Free Render apps sleep after idle time. The extension wakes `/health` automatically; first hit after sleep can take 30–60s.
-
-## 4. Alternative: ngrok
-
-1. `npm start` in `server/`
-2. `ngrok http 8765`
-3. Share the ngrok URL for the viewer
-4. Keep extension `SERVER_URL` on localhost if you only need remote viewers via tunnel
-
-## How it works
-
-| Component | Role |
-|-----------|------|
-| `content.js` | Detects answer changes, wakes server |
-| `background.js` | POSTs answers, retries, offline queue |
-| `popup` | Shows health / last sent / wake |
-| `server.js` | `/answer` ingest + WebSocket broadcast |
-| `viewer.html` | Live collaborator UI |
-
-## Troubleshooting
-
-### Desktop viewer with screen-capture exclusion (Windows and macOS)
-
-The separate desktop companion and instructions are in
-[`desktop-viewer/README.md`](desktop-viewer/README.md). It opens the existing
-live viewer link, requests capture exclusion on Windows and macOS, and provides Ctrl+Alt+V
-to hide or restore the window. Approval keeps the app visible on the taskbar;
-the setup panel collapses into a small Controls strip. Test the receiving side of the actual screen share:
-this does not hide Chrome, other apps, or the process in Task Manager, and
-it is not a guarantee against every capture method. The v5 approval flow needs
-the matching server update deployed first; see [Viewer access](VIEWER-ACCESS.md).
-
-### Chrome address-bar paste and answer formatting
-
-The rebuilt desktop app and activation steps are in
-[`caption-copier-fix/START-HERE.md`](caption-copier-fix/START-HERE.md).
-Extension 5.3 preserves Markdown from ChatGPT. The updated local viewer renders
-headings, emphasis, lists, tables, and code while streaming, using bundled
-Marked and DOMPurify scripts. The hosted server needs these viewer changes
-deployed separately.
-
-### Caption Copier sends to ChatGPT, but the viewer stays empty
-
-Caption Copier only handles pasting/submitting the prompt. This extension picks
-up the assistant answer and sends it to the server configured in `config.js`.
-
-1. In `chrome://extensions`, reload **Live Workspace** from this folder, then
-   refresh the ChatGPT tab. Both are needed after an extension update.
-2. Open the extension popup and choose **Test answer delivery**. This checks
-   `/answer` with the configured key without changing the displayed answer.
-   **Online** alone only means `/health` is reachable.
-3. If the popup says **Key rejected**, make `STREAM_KEY` in `config.js` match the
-   server's `STREAM_KEY`, then reload the extension and refresh ChatGPT again.
-4. Submit a new caption. **Last captured** should update, followed by
-   **Answer accepted** and **Last sent**. If nothing is captured, confirm that
-   the extension has access to the ChatGPT site and the tab was refreshed.
-5. Open the viewer at the same server address (using your viewer/editor access
-   link if enabled). Check **Connected** and **Auto Copy: ON**. The popup's
-   **Viewers connected** count should increase.
-
-The extension now selects the newest assistant reply, understands compact
-stream updates, and saves the newest unsent answer across background worker
-restarts. The local viewer now takes its Auto Copy setting from the server;
-opening another viewer cannot switch streaming off. Resuming Auto Copy replays
-the newest response completed while paused.
-
-**Hosted server:** changing these local files does not update Render. The owner
-approval update now includes the hosted password gate and the streaming fixes.
-See [Viewer access setup](VIEWER-ACCESS.md) for activation, owner controls, and
-the free-host restart limits. Deploy the server update before distributing the
-new desktop viewer.
-
-### Run the regression checks
-
-Install server dependencies with `npm.cmd ci --prefix server`, then run
-`npm.cmd test` from the project root. Tests use fake extension credentials and
-temporary local HTTP/WebSocket servers; they do not send to the hosted viewer.
-
-### Extension not detecting text
-
-- DevTools Console → look for `[Live Workspace] ANSWER CHANGED`
-- Reload extension + hard-refresh the chat tab
-
-### Viewer connected but empty
-
-- Turn **Auto Copy: ON**
-- Confirm `config.js` `SERVER_URL` / `STREAM_KEY`
-- Use extension popup → **Test answer delivery**
-
-### `npm` blocked on Windows PowerShell
-
-```powershell
-npm.cmd install
-npm.cmd start
-```
-
-## License
-
-Private / personal use.
+Owner approval controls access to the shared answer. Desktop capture exclusion depends on the operating system and capture method; test it with the person receiving your screen share. The process stays visible in Task Manager or Activity Monitor. See the [desktop notes](desktop-viewer/README.md) for the controls and platform limits.

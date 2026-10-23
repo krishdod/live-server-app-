@@ -5,6 +5,7 @@ const { app, BrowserWindow } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const os = require("node:os");
 const assert = require("node:assert/strict");
 const output = path.join(__dirname, "../artifacts/website-checks");
@@ -126,5 +127,20 @@ app.whenReady().then(async () => {
   await viewer.webContents.executeJavaScript(`document.querySelector('#focusBtn').click()`);
   assert.equal(await viewer.webContents.executeJavaScript(`getComputedStyle(document.querySelector('.header')).display`), "none");
   checks.push("real request → approve → stream; live dashboard counts; light theme; focus mode");
+  const popup = browser();
+  popup.setContentSize(360, 800);
+  const popupFixture = path.join(output, "popup-fixture.html");
+  const popupBaseHref = pathToFileURL(path.join(__dirname, "../")).href;
+  const bootstrap = `<base href="${popupBaseHref}"><script>window.chrome = { runtime: { sendMessage(message, callback) {
+    callback({server:'https://live-server-app.onrender.com',keyConfigured:true,health:{ok:true,clients:1},delivery:{sent:true,checkOnly:true},queueSize:0});
+  } } };</script>`;
+  const popupHtml = fs.readFileSync(path.join(__dirname, "../popup.html"), "utf8").replace("<head>", `<head>${bootstrap}`);
+  fs.writeFileSync(popupFixture, popupHtml);
+  await popup.loadFile(popupFixture);
+  await until(() => popup.webContents.executeJavaScript(`document.querySelector('#health').textContent === 'Online'`), "extension popup renders");
+  await popup.webContents.executeJavaScript(`document.querySelector('#settings').open = true`);
+  assert.equal(await popup.webContents.executeJavaScript(`document.documentElement.scrollWidth <= document.documentElement.clientWidth`), true);
+  await snapshot(popup, "extension_settings.png");
+  checks.push("actual extension popup with simulated backend; 360px settings layout");
   finish();
 }).catch(finish);

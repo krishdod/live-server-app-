@@ -14,7 +14,7 @@ async function page(t, name, options = {}) {
   const { window } = dom;
   for (const [key, value] of Object.entries(options.storage || {})) window.sessionStorage.setItem(key, value);
   for (const [key, value] of Object.entries(options.local || {})) window.localStorage.setItem(key, value);
-  const calls = [], navigations = [], timers = new Map(), sockets = [], clipboard = [];
+  const calls = [], navigations = [], timers = new Map(), intervals = new Map(), sockets = [], clipboard = [];
   let timerId = 0;
   const location = { protocol: url.protocol, host: url.host, origin: url.origin, search: url.search,
     get href() { return url.href; }, set href(value) { navigations.push(value); }, replace(value) { navigations.push(value); } };
@@ -27,10 +27,10 @@ async function page(t, name, options = {}) {
   const context = vm.createContext({ window, document: window.document,
     navigator: { clipboard: { writeText: async value => clipboard.push(value) } },
     location, sessionStorage: window.sessionStorage, localStorage: window.localStorage,
-    URLSearchParams, URL, Node: window.Node, NodeFilter: window.NodeFilter, CSS: {}, WebSocket: FakeWebSocket,
+    URLSearchParams, URL, Date: options.Date || Date, Node: window.Node, NodeFilter: window.NodeFilter, CSS: {}, WebSocket: FakeWebSocket,
     fetch: async (url, init = {}) => { calls.push({ url, init }); return options.fetch ? options.fetch(url, init) : response({ ok: true, role: "edit", secured: false, approvalEnabled: false }); },
     setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
-    clearTimeout(id) { timers.delete(id); }, setInterval() { return ++timerId; }, clearInterval() {}, console
+    clearTimeout(id) { timers.delete(id); }, setInterval(callback, delay) { const id = ++timerId; intervals.set(id, { callback, delay }); return id; }, clearInterval(id) { intervals.delete(id); }, console
   });
   if (name === "viewer") {
     for (const filename of ["vendor/marked.umd.js", "vendor/purify.min.js", "markdown.js"]) window.eval(fs.readFileSync(path.join(root, filename), "utf8"));
@@ -38,11 +38,12 @@ async function page(t, name, options = {}) {
     vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
   } else vm.runInContext(fs.readFileSync(path.join(root, `${name}.js`), "utf8"), context);
   await flush();
-  return { window, document: window.document, calls, navigations, timers, sockets, clipboard, context,
+  return { window, document: window.document, calls, navigations, timers, intervals, sockets, clipboard, context,
     el: id => window.document.getElementById(id),
     async click(id) { window.document.getElementById(id).click(); await flush(); },
     async submit(id) { window.document.getElementById(id).dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); await flush(); },
     async tick(delay) { const match = [...timers].find(([, timer]) => delay === undefined || timer.delay === delay); if (!match) throw new Error(`No timer with delay ${delay}`); timers.delete(match[0]); match[1].callback(); await flush(); },
+    async interval(delay) { const timer = [...intervals.values()].find(timer => timer.delay === delay); if (!timer) throw new Error(`No interval with delay ${delay}`); timer.callback(); await flush(); },
     receive(message, socket = sockets.at(-1)) { socket.onmessage({ data: JSON.stringify(message) }); }
   };
 }

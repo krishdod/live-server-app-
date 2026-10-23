@@ -1,5 +1,5 @@
 /* Shared product foundations; fonts and UI render without third-party requests. */
-:root { color-scheme: dark; --ui-bg: #111514; --ui-surface: #191e1c; --ui-raised: #202723; --ui-text: #edf0e9; --ui-muted: #a5afa7; --ui-line: #333d36; --ui-accent: #c0ddbc; --ui-accent-ink: #18251b; --ui-danger: #f2aaa3; --ui-radius: 12px; --ui-font: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; --ui-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-family: var(--ui-font); background: var(--ui-bg); color: var(--ui-text); }
+:root { color-scheme: dark; --ui-bg: #0b100d; --ui-surface: #131b16; --ui-raised: #1d2a22; --ui-text: #eef5f0; --ui-muted: #a2b2a7; --ui-line: #2c3a31; --ui-accent: #79e5a2; --ui-accent-ink: #102719; --ui-danger: #ffb0a5; --ui-radius: 12px; --ui-font: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; --ui-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-family: var(--ui-font); background: var(--ui-bg); color: var(--ui-text); }
 body.theme-light { color-scheme: light; --ui-bg: #f0f2ec; --ui-surface: #fcfdf9; --ui-raised: #e8ece3; --ui-text: #202b23; --ui-muted: #5b695e; --ui-line: #cbd3c6; --ui-accent: #2c563c; --ui-accent-ink: #fff; --ui-danger: #a33730; }
 :root, body.theme-light { --bg: var(--ui-bg); --text: var(--ui-text); --muted: var(--ui-muted); --panel: var(--ui-surface); --panel-border: var(--ui-line); --btn: var(--ui-raised); --btn-text: var(--ui-text); --badge: var(--ui-raised); --badge-text: var(--ui-muted); --caret: var(--ui-accent); }
 * { box-sizing: border-box; }
@@ -22,7 +22,7 @@ button:disabled { cursor: default; }
 .workspace-page:not(.overlay-mode) .header { min-height: 88px; padding: 20px 0; margin-bottom: 0; border-bottom: 1px solid var(--ui-line); gap: 20px; flex-wrap: wrap; }
 .workspace-page .logo { font-size: 16px; font-weight: 650; display: flex; align-items: center; gap: 10px; letter-spacing: -.4px; }
 .workspace-page .toolbar { gap: 7px; }
-.workspace-page :is(#accessAdminBtn, #shareBtn, #autoCopyBtn, #focusBtn, #themeBtn, #focusExit, #transparentBtn) { min-height: 34px; border: 1px solid var(--ui-line); border-radius: 7px; padding: 7px 11px; font-size: 12px; font-weight: 500; color: var(--ui-text); background: var(--ui-raised); }
+.workspace-page :is(#accessAdminBtn, #shareBtn, #autoCopyBtn, #focusBtn, #themeBtn, #focusExit, #transparentBtn, #copyAnswerBtn) { min-height: 34px; border: 1px solid var(--ui-line); border-radius: 7px; padding: 7px 11px; font-size: 12px; font-weight: 500; color: var(--ui-text); background: var(--ui-raised); }
 .workspace-page :is(#accessAdminBtn, #shareBtn) { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-accent-ink); font-weight: 650; }
 .workspace-page :is(#autoCopyBtn.on, #focusBtn.on) { background: #233b2b; border-color: #466e50; color: #d0e7cc; }
 .workspace-page.theme-light :is(#autoCopyBtn.on, #focusBtn.on) { background: #dfebda; border-color: #a4b49b; color: #254b32; }

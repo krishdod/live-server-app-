@@ -1,7 +1,8 @@
 body { margin: 0; min-height: 100dvh; background: var(--ui-bg); color: var(--ui-text); font: 15px/1.6 var(--ui-font); }
 main { margin: 0 auto; }
 .access-layout { width: min(1000px, calc(100% - 64px)); min-height: calc(100dvh - 170px); display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(40px, 8vw, 100px); padding: 64px 0; }
-.access-intro h1 { font-size: clamp(36px, 4.5vw, 56px); line-height: 1.08; font-weight: 550; letter-spacing: -.055em; margin: 18px 0 24px; max-width: 8em; }
+.access-intro h1 { font-size: clamp(36px, 4.5vw, 56px); line-height: 1.08; font-weight: 550; letter-spacing: -.055em; margin: 18px 0 24px; max-width: 10em; text-wrap: balance; }
+.access-intro h1 span { color: var(--ui-accent); }
 .access-intro > p { color: var(--ui-muted); max-width: 340px; line-height: 1.7; }
 .access-steps { list-style: none; padding: 0; margin: 36px 0 0; display: grid; gap: 20px; }
 .access-steps li { display: flex; gap: 14px; align-items: baseline; color: var(--ui-muted); font-size: 13px; }

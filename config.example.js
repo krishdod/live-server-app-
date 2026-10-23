@@ -3,7 +3,7 @@
 
 // Local:  "http://localhost:8765"
 // Render: "https://your-app.onrender.com"
-var SERVER_URL = "http://localhost:8765";
+var SERVER_URL = "https://live-server-app.onrender.com";
 
 // Must match STREAM_KEY on the server (Render Environment variables).
 // Leave empty only if STREAM_KEY is unset on the server.

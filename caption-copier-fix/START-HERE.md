@@ -25,13 +25,13 @@ checked.
 
 Reload Live Workspace from `C:\Users\admin\Downloads\live-stream-main` in
 `chrome://extensions`, then refresh ChatGPT. Extension version 5.3 preserves
-Markdown during capture.
+Markdown during capture. The current extension is version 5.4; its Connection
+settings let you set the server address and publishing key without editing files.
 
 The local server now renders headings, emphasis, lists, tables, and unfinished
 streaming code blocks. These changes include `server/viewer.html`,
 `server/markdown.js`, the scripts and licenses in `server/vendor`, and the
 static script routes in `server/server.js`.
 
-The hosted Render server has not been updated. Its newer authentication code
-must be preserved when applying these changes; do not overwrite it with this
-older local server file.
+Deploy the current `server/` source for the latest website and connection
+recovery logic. Preserve your Render environment settings when deploying.

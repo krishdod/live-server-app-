@@ -88,3 +88,40 @@ test("explicit legacy mode retains server-provided keyed share links", async t =
   await h.click("shareBtn"); await h.click("copyLinkBtn");
   assert.equal(h.clipboard.at(-1), "https://workspace.test/?role=view&key=legacy-test");
 });
+
+test("selecting a read-only answer never pauses subsequent streamed updates", async t => {
+  const h = await page(t, "viewer", { search: "?role=view", fetch: async () => response({ ok: true, role: "view" }) });
+  h.receive({ type: "auth", role: "view", clientId: "viewer-1" });
+  h.receive({ type: "autoCopy", on: true });
+  h.el("answer").tabIndex = 0;
+  h.el("answer").focus();
+  h.receive({ type: "sync", from: "stream", text: "First answer" });
+  h.receive({ type: "sync", from: "stream", text: "The newest answer" });
+  assert.match(h.el("answer").textContent, /The newest answer/);
+});
+
+test("a stalled socket reconnects and a healthy one sends only a heartbeat", async t => {
+  let time = 1000;
+  class TestDate extends Date { static now() { return time; } }
+  const h = await page(t, "viewer", { search: "?role=view", Date: TestDate, fetch: async () => response({ ok: true, role: "view" }) });
+  const socket = h.sockets[0];
+  socket.readyState = 1;
+  socket.onopen();
+  await h.interval(20000);
+  assert.equal(socket.sent[0].type, "ping");
+  time += 46000;
+  await h.interval(20000);
+  assert.equal(h.sockets.length, 2);
+  assert.equal(socket.readyState, 3);
+  assert.equal(h.navigations.length, 0, "temporary transport failures do not request approval again");
+});
+
+test("Copy answer copies readable content without changing the shared answer", async t => {
+  const h = await page(t, "viewer", { search: "?role=view", fetch: async () => response({ ok: true, role: "view" }) });
+  h.receive({ type: "auth", role: "view", clientId: "viewer-1" });
+  h.receive({ type: "sync", from: "server", text: "## Answer\n\n**Copy this.**" });
+  await h.click("copyAnswerBtn");
+  assert.match(h.clipboard[0], /Copy this/);
+  assert.equal(h.sockets[0].sent.length, 0);
+  assert.match(h.el("answer").textContent, /Copy this/);
+});
