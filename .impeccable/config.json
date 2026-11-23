@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "desktop-viewer/home.html"
+        ],
+        "createdAt": "2026-11-23T21:05:53.439Z",
+        "reason": "Codex: the intentional 44px viewer strip vertically centers its 30px controls and text; the rendered host.png shows roughly 14px of text inset. The static scanner treats zero wrapper padding as flush despite flex centering. Preserve the verified compact toolbar."
+      }
+    ]
+  }
+}
