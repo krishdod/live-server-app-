@@ -54,7 +54,28 @@ jobs:
         shell: bash
         run: |
           codesign --verify --deep --strict "releases/mac-universal/Live Workspace Viewer.app"
-          lipo -verify_arch x86_64 arm64 "releases/mac-universal/Live Workspace Viewer.app/Contents/MacOS/Live Workspace Viewer"
+          lipo "releases/mac-universal/Live Workspace Viewer.app/Contents/MacOS/Live Workspace Viewer" -verify_arch x86_64 arm64
+      - name: Check packaged Mac renderer launches
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          task_app="$PWD/releases/mac-universal/Live Workspace Viewer.app/Contents/MacOS/Live Workspace Viewer"
+          task_data="$(mktemp -d)"
+          "$task_app" --user-data-dir="$task_data" > "$RUNNER_TEMP/mac-viewer-launch.log" 2>&1 &
+          task_pid=$!
+          trap 'kill "$task_pid" 2>/dev/null || true' EXIT
+          for task_attempt in $(seq 1 30); do
+            if ! kill -0 "$task_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/mac-viewer-launch.log"
+              exit 1
+            fi
+            if pgrep -P "$task_pid" -f -- '--type=renderer' > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/mac-viewer-launch.log"
+          exit 1
       - uses: actions/upload-artifact@v7
         with:
           name: viewer-${{ runner.os }}
