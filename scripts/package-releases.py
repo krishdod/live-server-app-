@@ -7,7 +7,9 @@ import argparse
 import hashlib
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--viewer-only", action="store_true")
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument("--viewer-only", action="store_true")
+mode.add_argument("--extension-only", action="store_true")
 args = parser.parse_args()
 
 root = Path(__file__).resolve().parents[1]
@@ -34,8 +36,11 @@ if not args.viewer_only:
     package(f"LiveWorkspace-extension-{extension_version}.zip", root, extension_files,
         "Extract into a permanent folder. Open chrome://extensions, enable Developer mode, and choose Load unpacked.\n"
         "Select the extracted folder. Open the extension popup > Connection settings.\n"
+        "To update an existing installation, replace files in its original extension folder, reload it in chrome://extensions, and refresh ChatGPT. Do not load a second copy.\n"
         "Set https://live-server-app.onrender.com and paste STREAM_KEY from your own Render service. Save, then Test delivery.\n"
         "Refresh ChatGPT and ask a new question. Never share your publishing key.\n")
+if args.extension_only:
+    raise SystemExit(0)
 shutil.copy2(root / "START-HERE.md", output / "START-HERE.md")
 executable = output / f"LiveWorkspaceViewer-{desktop_version}-setup.exe"
 if not executable.exists():

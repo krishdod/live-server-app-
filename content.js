@@ -55,7 +55,6 @@ let networkAnswer = "";
 let networkStreaming = false;
 let networkRequestId = 0;
 let networkDomContainer = null;
-let networkDomText = "";
 const STREAM_CHANNEL = "__LIVE_WORKSPACE_STREAM__";
 
 function isMarkerOnly(text) {
@@ -432,6 +431,13 @@ function getLatestAnswer() {
   }
 
   const answer = extractFromContainer(container);
+  // Once the visible answer catches up, let the page own future updates. Some
+  // layouts reuse the same element for a later reply or a regenerated answer.
+  if (networkAnswer && !networkStreaming && answer === networkAnswer) {
+    networkAnswer = "";
+    networkDomContainer = null;
+    return answer;
+  }
   // Keep a completed snapshot until the DOM catches up, but do not pin an old
   // network answer over subsequent replies that are only visible in the DOM.
   if (networkAnswer && container === networkDomContainer) {
@@ -632,7 +638,6 @@ function resetWatch(reason) {
   networkAnswer = "";
   networkStreaming = false;
   networkDomContainer = null;
-  networkDomText = "";
   clearTimeout(liveTimer);
   console.log(`[Live Workspace] Reset — ${reason}`);
 }
@@ -697,7 +702,7 @@ function tick() {
   }
 }
 
-console.log(`[Live Workspace] Watching: ${SITE} (extractor v6.1 — network+dom)`);
+console.log(`[Live Workspace] Watching: ${SITE} (extractor v6.2 — network+dom)`);
 
 window.addEventListener("message", (event) => {
   if (event.source !== window) return;
@@ -727,7 +732,6 @@ window.addEventListener("message", (event) => {
   if (data.type === "answer" && typeof data.text === "string" && data.text.trim()) {
     networkAnswer = data.text;
     networkDomContainer = getAnswerContainer();
-    networkDomText = networkDomContainer ? extractFromContainer(networkDomContainer) : "";
     queueLivePublish("stream");
   }
 });

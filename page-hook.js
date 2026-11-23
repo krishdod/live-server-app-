@@ -8,6 +8,7 @@
   let nextRequestId = 0;
   let activeRequestId = 0;
   let streamingRequestId = 0;
+  let generation = 0;
   let lastAnswerEvent = null;
   let lastLifecycleEvent = null;
 
@@ -123,7 +124,17 @@
       return;
     }
     if (typeof parsed.delta === "string") {
-      if (!state.payload?.message || isVisibleAssistant(state.payload.message)) state.text += parsed.delta;
+      const message = state.payload?.message;
+      if (!message) return;
+      // Unknown delta formats fall back to visible-page capture. Never infer
+      // that unscoped text is a public answer or lose an explicit private role.
+      for (const field of ["author", "channel", "recipient"]) {
+        if (Object.hasOwn(parsed, field)) message[field] = parsed[field];
+      }
+      if (parsed.metadata && typeof parsed.metadata === "object") {
+        message.metadata = { ...message.metadata, ...parsed.metadata };
+      }
+      if (isVisibleAssistant(message)) state.text += parsed.delta;
       return;
     }
     if (Object.hasOwn(parsed, "v")) {
@@ -216,7 +227,10 @@
     const method = String(init?.method || input?.method || "GET").toUpperCase();
     const isGeneration = method === "POST" && /\/conversation$/.test(url.pathname);
     const requestId = ++nextRequestId;
+    const generationAtRequest = generation;
+    const requestedDuringStream = Boolean(streamingRequestId);
     if (isGeneration) {
+      generation++;
       activeRequestId = requestId;
       streamingRequestId = requestId;
       lastAnswerEvent = null;
@@ -243,6 +257,9 @@
         parseSSE(response.clone().body, requestId).catch(() => {}).finally(finish);
       } else if (/json/i.test(contentType)) {
         response.clone().json().then((data) => {
+          // A history snapshot taken before/during generation can arrive after
+          // the final token. Its later request ID does not make its answer newer.
+          if (!isGeneration && (requestedDuringStream || generationAtRequest !== generation)) return;
           // Ignore history prefetches for conversations not on screen.
           const conversationId = data.conversation_id || (/\/conversation\/(.+)$/.exec(url.pathname) || [])[1];
           if (conversationId && !location.pathname.endsWith("/c/" + conversationId)) return;

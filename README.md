@@ -7,7 +7,7 @@ Stream formatted answers from ChatGPT or Perplexity into an owner-approved deskt
 ## Current release
 
 - Viewer 1.6.0: bundled server address, automatic connection, bounded retries, clearer connection diagnostics, patched Electron runtime, and Windows setup/portable packages. Compact controls, translucent backgrounds and opaque text remain available after approval.
-- Browser extension 5.4: live capture, newest-answer delivery queue, persistent connection settings and a delivery test that does not change the shared answer.
+- Browser extension 5.4.1: live capture, stale-history protection, safe handoff from completed streams to visible replies, persistent connection settings and a delivery test that does not change the shared answer.
 - Node relay: formatted live updates, owner approval, revocation and recovery from stalled connections.
 
 Local packages are generated in `releases/`. Recipients use the Windows setup EXE or the universal Mac DMG built by GitHub Actions. The app includes its runtime and needs no URL entry. Mac test packages are ad-hoc signed; Developer ID signing and notarization are a separate distribution requirement. Old Mac source ZIPs are not recipient installers.
