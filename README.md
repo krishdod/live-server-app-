@@ -4,6 +4,11 @@ Stream formatted answers from ChatGPT or Perplexity into an owner-approved deskt
 
 **[Start here](START-HERE.md)** for installation, connection settings and the first successful answer.
 
+**Meeting captions (preview):** a local English caption sender can relay text and
+estimated speaker labels to the helper through a separate channel. See
+[setup and limitations](meeting-captions/START-HERE.md). Deploy the new server
+routes before using this feature; it is separate from the existing answer viewer.
+
 ## Current release
 
 - Viewer 1.6.0: bundled server address, automatic connection, bounded retries, clearer connection diagnostics, patched Electron runtime, and Windows setup/portable packages. Compact controls, translucent backgrounds and opaque text remain available after approval.

@@ -5,6 +5,9 @@ const crypto = require("crypto");
 const WebSocket = require("ws");
 const nodemailer = require("nodemailer");
 const { ApprovalStore } = require("./approval");
+const { TranscriptStore } = require("./transcripts");
+const transcripts = new TranscriptStore();
+setInterval(() => transcripts.sweep(), 60_000).unref();
 
 const PORT = Number(process.env.PORT || 8765);
 const viewerPath = path.join(__dirname, "viewer.html");
@@ -409,6 +412,46 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
   const pathname = String(req.url || "").split("?")[0];
+  if (pathname.startsWith("/api/transcripts/")) {
+    try {
+      // Native senders have no Origin. Browser actions must be same-origin.
+      if (req.method === "POST" && req.headers.origin && !sameOrigin(req)) {
+        json(res, 403, { error: "Open this action from the workspace." }); return;
+      }
+      if (pathname === "/api/transcripts/pair" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req, 4096));
+        json(res, 200, transcripts.pair(body.code, body.name, clientIp(req))); return;
+      }
+      if (pathname === "/api/transcripts/ingest" && req.method === "POST") {
+        const token = String(req.headers.authorization || "").replace(/^Bearer /, "");
+        json(res, 200, transcripts.ingest(token, JSON.parse(await readBody(req, 20000)))); return;
+      }
+      if (!authorizeAdmin(req)) { json(res, 403, { error: "Owner access required" }); return; }
+      if (pathname === "/api/transcripts/sessions" && req.method === "GET") {
+        json(res, 200, { sessions: transcripts.list() }); return;
+      }
+      if (pathname === "/api/transcripts/snapshot" && req.method === "GET") {
+        const params = parseQuery(req.url);
+        const after = Number(params.get("after") || 0);
+        if (!Number.isSafeInteger(after) || after < 0) { json(res, 400, { error: "Invalid cursor" }); return; }
+        json(res, 200, transcripts.snapshot(params.get("id"), after)); return;
+      }
+      if (pathname === "/api/transcripts/sessions" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req, 4096));
+        if (body.action === "create") { json(res, 201, { session: transcripts.create() }); return; }
+        if (body.action === "end") transcripts.end(body.id);
+        else if (body.action === "rename") transcripts.rename(body.id, body.speaker, body.name);
+        else if (body.action === "assign") transcripts.assign(body.id, body.turnId, body.speaker);
+        else { json(res, 400, { error: "Unknown transcript action" }); return; }
+        json(res, 200, { ok: true }); return;
+      }
+      json(res, 404, { error: "Not found" });
+    } catch (error) {
+      const tooLarge = String(error.message).includes("Body too large");
+      json(res, error.status || (tooLarge ? 413 : 400), { error: error.status ? error.message : "Invalid transcript request" });
+    }
+    return;
+  }
   if (pathname.startsWith("/api/access/")) {
     try {
       await accessApi(req, res, pathname);
@@ -437,6 +480,9 @@ const server = http.createServer(async (req, res) => {
     "/markdown.js": ["markdown.js", "text/javascript"],
     "/access": ["access.html", "text/html"],
     "/access-admin": ["access-admin.html", "text/html"],
+    "/transcripts": ["transcripts.html", "text/html"],
+    "/transcripts.js": ["transcripts-ui.js", "text/javascript"],
+    "/transcripts.css": ["transcripts.css", "text/css"],
     "/access.js": ["access.js", "text/javascript"],
     "/access-admin.js": ["access-admin.js", "text/javascript"],
     "/access.css": ["access.css", "text/css"],

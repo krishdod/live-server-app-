@@ -36,7 +36,7 @@ async function page(t, name, options = {}) {
     for (const filename of ["vendor/marked.umd.js", "vendor/purify.min.js", "markdown.js"]) window.eval(fs.readFileSync(path.join(root, filename), "utf8"));
     context.marked = window.marked; context.DOMPurify = window.DOMPurify; context.LiveMarkdown = window.LiveMarkdown;
     vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
-  } else vm.runInContext(fs.readFileSync(path.join(root, `${name}.js`), "utf8"), context);
+  } else vm.runInContext(fs.readFileSync(path.join(root, `${name === "transcripts" ? "transcripts-ui" : name}.js`), "utf8"), context);
   await flush();
   return { window, document: window.document, calls, navigations, timers, intervals, sockets, clipboard, context,
     el: id => window.document.getElementById(id),

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'">
+  <title>Live Workspace — Meeting transcript</title>
+  <link rel="stylesheet" href="/workspace.css"><link rel="stylesheet" href="/transcripts.css">
+  <script src="/transcripts.js" defer></script>
+</head>
+<body>
+  <header class="site-nav"><a class="brand" href="/?role=edit"><span class="brand-mark" aria-hidden="true"></span>Live Workspace</a><a class="nav-link" href="/access-admin">Viewer access</a></header>
+  <main>
+    <h1>Meeting transcript</h1>
+    <p class="intro">Read the conversation as it happens. Audio stays on the meeting computer; only text is shared here.</p>
+    <form id="login" hidden>
+      <label>Owner access key<input id="key" type="password" autocomplete="off" required></label>
+      <label>Workspace password (if configured)<input id="password" type="password" autocomplete="current-password"></label>
+      <button type="submit">Open transcripts</button>
+    </form>
+    <div id="dashboard" hidden>
+      <div class="controls">
+        <label class="session-picker">Session<select id="sessions" aria-label="Transcript session"></select></label>
+        <button id="create" type="button">New session</button>
+        <button id="end" class="secondary" type="button" disabled>End &amp; erase</button>
+        <button id="signout" class="secondary" type="button">Sign out</button>
+      </div>
+      <section id="pairing" hidden aria-label="Pair the meeting computer">
+        <div><h2>Connect the meeting computer</h2><p>Open Meeting Caption Sender there and enter this one-use code. It expires in 10 minutes.</p></div>
+        <div class="code-line"><output id="code"></output><button id="copyCode" class="secondary" type="button">Copy code</button></div>
+      </section>
+      <div class="transcript-layout">
+        <section class="conversation" aria-label="Live transcript">
+          <div class="feed-heading"><h2>Conversation</h2><span id="connection">No session</span></div>
+          <p id="empty">Create a session, then share its pairing code with the person running the meeting.</p>
+          <ol id="turns"></ol>
+          <p id="draft" hidden></p>
+          <div class="feed-actions"><button id="copyLatest" type="button" disabled>Copy latest phrase</button><a class="nav-link" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Open ChatGPT</a></div>
+          <p class="help">Copy a phrase, paste it into ChatGPT, then send when ready. Your answer stream continues separately.</p>
+        </section>
+        <aside>
+          <h2>Speakers</h2><p class="help">Labels are estimates. Rename a voice when you recognize it, or correct a phrase using its speaker menu. Short or overlapping speech may be Unknown.</p>
+          <form id="rename"><label>Speaker<select id="speaker"><option value="speaker-1">Speaker 1</option><option value="speaker-2">Speaker 2</option><option value="speaker-3">Speaker 3</option><option value="speaker-4">Speaker 4</option><option value="speaker-5">Speaker 5</option><option value="speaker-6">Speaker 6</option><option value="speaker-7">Speaker 7</option><option value="speaker-8">Speaker 8</option></select></label><label>Name<input id="speakerName" maxlength="60" autocomplete="off" placeholder="e.g. Alex"></label><button id="saveName" class="secondary" type="submit" disabled>Save name</button></form>
+          <p class="help">Sessions last 2 hours. The newest 300 phrases are held in server memory. End &amp; erase removes them and disconnects the sender.</p>
+        </aside>
+      </div>
+    </div>
+    <p id="notice" role="status" aria-live="polite">Checking owner access…</p>
+  </main>
+</body></html>
