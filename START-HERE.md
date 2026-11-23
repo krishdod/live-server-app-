@@ -14,8 +14,8 @@ Connection settings are stored on this computer. The key is never included in re
 ## Open the app
 
 1. Close an older viewer with **Close** or **End**.
-2. Run `releases/LiveWorkspaceViewer-1.5.1-portable.exe` on Windows.
-3. Choose **Open**, enter a name, and request access. The default page is `https://live-server-app.onrender.com/access`.
+2. Run `releases/LiveWorkspaceViewer-1.6.0-setup.exe` on Windows. A portable EXE is also available.
+3. The access page opens automatically. Enter a name and request access. The server address and runtime are included; recipients install no Node.js and enter no URL.
 4. Give your request code to the owner. The owner approves it at `https://live-server-app.onrender.com/access-admin`.
 5. After approval, the viewer window remains visible and switches to its compact reading view; its taskbar/Dock icon hides. Enable **Taskbar / Dock** in Controls to show the icon again. **Connected** indicates the live connection. **Paused** means the owner needs to turn Auto Copy on.
 6. Ask a new question in ChatGPT. The popup should update **Last captured** and **Last delivered**, and the answer should appear in the app.
@@ -26,6 +26,8 @@ The app requests capture exclusion, but protection varies with the operating sys
 
 ## Publish the server changes
 
-The revised website and connection recovery logic are local until the server is deployed. Push the reviewed changes to your GitHub repository and deploy its latest commit in Render. Root directory: `server`; build command: `npm ci`; start command: `npm start`. Keep one server instance. Set `APP_ORIGIN=https://live-server-app.onrender.com`, `VIEWER_APPROVAL_REQUIRED=true`, a private `EDIT_KEY`, and a separate `STREAM_KEY`. Keep your existing optional app password and mail settings.
+Server dependency updates take effect after deployment. Deploy the reviewed commit in Render. Root directory: `server`; build command: `npm ci`; start command: `npm start`; Node version: 26 LTS. Keep one server instance. Set `APP_ORIGIN=https://live-server-app.onrender.com`, `VIEWER_APPROVAL_REQUIRED=true`, a private `EDIT_KEY`, and a separate `STREAM_KEY`. Keep your existing optional app password and mail settings.
 
-For macOS, the release ZIP contains source and `start-mac.command`; it requires Node.js and has not been run on a Mac in this Windows environment. Build signed Mac installers on a Mac before distributing them as installers.
+For macOS, use the universal DMG or bundled app ZIP from the **Build desktop viewer** GitHub Actions workflow. It builds on macOS for both Intel and Apple Silicon; the recipient needs no Node.js or Terminal. The workflow's test builds use ad-hoc signing. Apple Developer ID signing and notarization are still needed for normal public distribution under Gatekeeper. The old `mac-source.zip` downloads are development source, not recipient installers.
+
+If the app cannot connect, temporary failures retry automatically. Choose **Retry connection** if needed, then **Copy error details**. The copied report checks the app's own proxy route and server health without including keys, cookies, local paths or answer text.

@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="home.css">
   <script src="home.js" defer></script>
 </head>
-<body>
+<body class="compact">
   <div class="viewer-strip" role="toolbar" aria-label="Viewer controls">
     <div class="strip-heading"><span class="app-mark" aria-hidden="true"></span><strong>Workspace</strong><span class="ready-label" role="status">Connecting</span><span id="strip-opacity" title="Background opacity">65%</span></div>
     <div class="strip-actions">
@@ -23,12 +23,6 @@
       <h1>Live Workspace <span>Viewer</span></h1>
       <div class="header-tools"><label class="pin-control" title="Show the app icon in the taskbar or Dock"><input id="show-app-icon" type="checkbox" checked disabled><span id="app-icon-label">Taskbar</span></label><button id="theme-toggle" type="button" disabled title="Switch between dark and light reading themes">Theme</button><span id="protection" class="protection pending" role="status">Checking protection…</span></div>
     </div>
-
-    <form id="open-form" class="address-row" autocomplete="off">
-      <label for="viewer-url" class="sr-only">Viewer link</label>
-      <input id="viewer-url" type="url" inputmode="url" value="https://live-server-app.onrender.com/access" placeholder="Paste your viewer link" spellcheck="false" autocomplete="off" required>
-      <button id="open-button" class="primary" type="submit">Open</button>
-    </form>
 
     <div class="controls-row">
       <div class="control-group">
@@ -45,7 +39,6 @@
         </div>
       </div>
       <div class="window-actions">
-        <button id="change-link" type="button" hidden title="Show the address box again">Link</button>
         <button id="hide-controls" type="button" hidden title="Hide controls (Ctrl+Alt+B)" aria-label="Hide controls (Ctrl+Alt+B)">Done</button>
         <button id="reload" type="button" title="Reload the viewer">Reload</button>
         <button id="hide" type="button" disabled title="Waiting for keyboard shortcut">Hide</button>
@@ -54,16 +47,20 @@
     </div>
 
     <div class="hint-row">
-      <span id="status-message" role="status">Open the access page to request approval.</span>
+      <span id="status-message" role="status">Connecting to your workspace…</span>
       <span id="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> · <kbd>B</kbd> controls · <kbd>T</kbd> pin · <kbd>C</kbd> click-through · <kbd>=</kbd>/<kbd>-</kbd> opacity</span>
     </div>
   </header>
 
   <main class="welcome">
     <div class="welcome-content">
-      <div class="eyebrow">YOUR LIVE PAGE, IN ITS OWN WINDOW</div>
-      <h2>Request access, then open your live page.</h2>
-      <p>Choose Open, request access, and share your request code with the owner. The page stays visible while you wait. Once approved, your familiar viewer controls become available.</p>
+      <section id="connection-error" class="connection-error" hidden aria-labelledby="connection-error-title">
+        <h2 id="connection-error-title">Could not open the workspace</h2>
+        <p id="open-error" class="error" role="alert"></p>
+        <div class="error-actions"><button id="retry-connection" class="primary" type="button">Retry connection</button><button id="copy-error" type="button">Copy error details</button></div>
+      </section>
+      <h2>Connecting your workspace…</h2>
+      <p>The access page opens automatically. Enter your name and share the request code with the owner. Your live answers appear here after approval.</p>
       <ol>
         <li><span>1</span><div>After approval, the live page stays open. This setup panel collapses into a small controls strip.</div></li>
         <li><span>2</span><div>Choose Controls or press Ctrl+Alt+B for window settings. Click-through starts off; turn it on only when you want clicks to pass to apps behind.</div></li>
@@ -73,8 +70,7 @@
         <strong>Protection has limits.</strong>
         <p>This window requests exclusion from compatible screen captures. Other apps are unaffected, and this app remains visible in Task Manager. Some capture methods may still show its contents.</p>
       </div>
-      <p class="local-note">Approval is kept only for this app session. Nothing connects until you choose Open. Closing the app requires a new request next time.</p>
-      <p id="open-error" class="error" role="alert" hidden></p>
+      <p class="local-note">The server address and runtime are included in this app. An internet connection is required. Approval lasts for this app session; closing it requires a new request next time.</p>
     </div>
   </main>
 </body>

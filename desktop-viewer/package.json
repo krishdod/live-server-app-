@@ -1,6 +1,6 @@
 {
   "name": "live-workspace-private-viewer",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "private": true,
   "description": "Desktop viewer with capture exclusion for Live Workspace (Windows and macOS)",
   "author": "Live Workspace",
@@ -12,14 +12,17 @@
     "test:approval-smoke": "electron approval-smoke-test.js",
     "test:transparency": "electron transparency-smoke-test.js",
     "pack": "electron-builder --win dir",
-    "dist": "electron-builder --win portable",
+    "dist": "electron-builder --win nsis portable --x64 --publish never",
     "pack:mac": "electron-builder --mac dir",
-    "dist:mac": "electron-builder --mac dmg zip",
-    "dist:all": "electron-builder --win portable --mac dmg zip"
+    "dist:mac": "electron-builder --mac dmg zip --universal --publish never",
+    "dist:mac:zip": "electron-builder --mac zip --x64 --arm64 --publish never"
   },
   "devDependencies": {
-    "electron": "44.7.2",
-    "electron-builder": "26.15.3"
+    "electron": "44.11.5",
+    "electron-builder": "26.18.0"
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
   },
   "build": {
     "appId": "com.liveworkspace.privateviewer",
@@ -37,18 +40,27 @@
       "home.js",
       "home.css",
       "package.json",
-      "app-icon.js"
+      "app-icon.js",
+      "open-errors.js",
+      "connection.js"
     ],
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
         }
       ],
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "LiveWorkspaceViewer-${version}-setup.exe",
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true
     },
     "portable": {
       "artifactName": "LiveWorkspaceViewer-${version}-portable.exe"
@@ -58,15 +70,13 @@
         {
           "target": "dmg",
           "arch": [
-            "x64",
-            "arm64"
+            "universal"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "x64",
-            "arm64"
+            "universal"
           ]
         }
       ],
@@ -77,6 +87,7 @@
     },
     "dmg": {
       "artifactName": "LiveWorkspaceViewer-${version}-${arch}.dmg"
-    }
+    },
+    "artifactName": "LiveWorkspaceViewer-${version}-${os}-${arch}.${ext}"
   }
 }

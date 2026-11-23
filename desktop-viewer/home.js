@@ -1,35 +1,35 @@
 "use strict";
 
 const api = window.viewerApi;
-const form = document.getElementById("open-form");
-const urlInput = document.getElementById("viewer-url");
-const openButton = document.getElementById("open-button");
+const retryButton = document.getElementById("retry-connection");
+const reloadButton = document.getElementById("reload");
 const protectionLabel = document.getElementById("protection");
 const statusMessage = document.getElementById("status-message");
 const errorMessage = document.getElementById("open-error");
+const errorPanel = document.getElementById("connection-error");
 const hideButton = document.getElementById("hide");
 const shortcutHint = document.getElementById("shortcut-hint");
 const pinCheckbox = document.getElementById("pin");
 const clickThroughCheckbox = document.getElementById("click-through");
-const changeLinkButton = document.getElementById("change-link");
 const hideControlsButton = document.getElementById("hide-controls");
 const showControlsButton = document.getElementById("show-controls");
 const stripCloseButton = document.getElementById("strip-close");
 const opacityLabel = document.getElementById("opacity-label");
 const opacityUp = document.getElementById("opacity-up");
 const opacityDown = document.getElementById("opacity-down");
-const DEFAULT_VIEWER_URL = "https://live-server-app.onrender.com/access";
-const FULL_HEADER = 176;
 const COMPACT_HEADER = 128;
 const COLLAPSED_HEADER = 44;
 let opening = false;
 let currentStatus = null;
 let lastPointerOverToolbar = true;
+let errorDetails = null;
 
-function showError(message) {
-  const text = message || "The viewer could not open. Check the link and try again.";
+function showError(message, details = null) {
+  const text = message || "The workspace could not connect. Choose Retry connection.";
   errorMessage.textContent = text;
   errorMessage.hidden = false;
+  errorPanel.hidden = false;
+  errorDetails = details;
   statusMessage.textContent = text;
   statusMessage.title = text;
   statusMessage.classList.add("error-message");
@@ -37,30 +37,24 @@ function showError(message) {
 
 function headerLimit() {
   if (document.body.classList.contains("toolbar-hidden")) return COLLAPSED_HEADER;
-  return document.body.classList.contains("compact") ? COMPACT_HEADER : FULL_HEADER;
-}
-
-function concealLink() {
-  urlInput.value = "";
-  form.hidden = true;
-  changeLinkButton.hidden = false;
-  document.body.classList.add("compact");
-}
-
-function revealLinkEditor() {
-  form.hidden = false;
-  changeLinkButton.hidden = true;
-  document.body.classList.remove("compact");
-  if (!urlInput.value) urlInput.value = DEFAULT_VIEWER_URL;
-  urlInput.focus();
-  urlInput.select();
-  if (api) api.setLinkBarVisible(true).catch(() => {});
+  return COMPACT_HEADER;
 }
 
 function applyStatus(status) {
   const wasCollapsed = document.body.classList.contains("toolbar-hidden");
   const focusInPanel = document.querySelector(".toolbar").contains(document.activeElement);
   currentStatus = status || {};
+  retryButton.disabled = reloadButton.disabled = Boolean(currentStatus.opening);
+  retryButton.textContent = currentStatus.opening ? "Connecting…" : "Retry connection";
+  document.querySelector('.welcome-content > h2').textContent = currentStatus.failure ? "Let’s reconnect." : "Connecting your workspace…";
+  if (currentStatus.failure && !currentStatus.opening) showError(currentStatus.failure.message, currentStatus.failure.diagnostics);
+  else {
+    errorPanel.hidden = true;
+    errorMessage.hidden = true;
+    errorDetails = null;
+    document.getElementById("copy-error").textContent = "Copy error details";
+  }
+  document.querySelector("h1 span").textContent = currentStatus.version ? `Viewer ${currentStatus.version}` : "Viewer";
   const protectedWindow = currentStatus.supported && currentStatus.protection;
   protectionLabel.textContent = protectedWindow ? "Capture protection on" : "Protection unavailable";
   protectionLabel.className = `protection ${protectedWindow ? "enabled" : "unavailable"}`;
@@ -79,7 +73,7 @@ function applyStatus(status) {
   if (currentStatus.clickThroughShortcut) parts.push("<kbd>C</kbd> click-through");
   if (currentStatus.opacityUpShortcut || currentStatus.opacityDownShortcut) parts.push("<kbd>=</kbd>/<kbd>-</kbd> opacity");
   shortcutHint.hidden = parts.length === 0;
-  shortcutHint.innerHTML = parts.join(" · ");
+  shortcutHint.innerHTML = parts.slice(0, 2).join(" · ");
 
   pinCheckbox.checked = Boolean(currentStatus.pinned);
   clickThroughCheckbox.checked = Boolean(currentStatus.clickThrough);
@@ -93,11 +87,6 @@ function applyStatus(status) {
   opacityUp.disabled = Boolean(currentStatus.interactivePage) || percent >= 100;
   opacityDown.disabled = Boolean(currentStatus.interactivePage) || percent <= 20;
 
-  if (currentStatus.linkHidden) concealLink();
-  else if (!form.hidden && !opening) {
-    changeLinkButton.hidden = true;
-    document.body.classList.remove("compact");
-  }
   document.body.classList.toggle("toolbar-hidden", Boolean(currentStatus.toolbarHidden));
   document.documentElement.classList.toggle("viewer-glass", currentStatus.interactivePage === false);
   hideControlsButton.hidden = currentStatus.interactivePage !== false;
@@ -122,37 +111,46 @@ function applyStatus(status) {
   statusMessage.classList.remove("error-message");
   statusMessage.textContent = !currentStatus.shortcut
     ? "Show/hide shortcut unavailable. Use Controls or launch this app again to return."
-    : currentStatus.message || "Open the access page to request approval.";
+    : currentStatus.message || "Connecting to your workspace…";
   statusMessage.title = [statusMessage.textContent, currentStatus.message].filter(Boolean).join(" ");
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function runOpen(action) {
   if (opening) return;
   opening = true;
-  openButton.disabled = true;
-  openButton.textContent = "Opening…";
+  retryButton.disabled = reloadButton.disabled = true;
   errorMessage.hidden = true;
+  errorPanel.hidden = true;
+  errorDetails = null;
   statusMessage.classList.remove("error-message");
   statusMessage.textContent = "Opening your viewer…";
   try {
-    const result = await api.open(urlInput.value.trim());
+    const result = await action();
     if (!result || !result.ok) {
-      showError(result && result.error);
+      showError(result && result.error, result?.diagnostics);
     } else {
-      applyStatus(result);
+      applyStatus(await api.status());
     }
-  } catch {
-    showError("The viewer could not open. Check the link and try again.");
+  } catch (error) {
+    const code = String(error?.message || "").includes("APP_TOOLBAR") ? "APP_TOOLBAR" : "APP_IPC";
+    showError(`The app could not start its page controls. Close it completely and reopen the latest app. If it repeats, choose Copy error details. [${code}]`,
+      { app: "Live Workspace Viewer", version: currentStatus?.version || "unknown", error: { code, stage: "toolbar" } });
   } finally {
     opening = false;
-    openButton.disabled = false;
-    openButton.textContent = "Open";
+    retryButton.disabled = reloadButton.disabled = false;
   }
-});
-
-changeLinkButton.addEventListener("click", () => {
-  revealLinkEditor();
+}
+retryButton.addEventListener("click", () => { void runOpen(() => api.reload()); });
+document.getElementById("copy-error").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = "Checking connection…";
+  try {
+    if (errorDetails?.error?.stage === "toolbar") await navigator.clipboard.writeText(JSON.stringify(errorDetails, null, 2));
+    else await api.copyDiagnostics();
+    button.textContent = "Copied — send these details to the owner";
+  } catch { button.textContent = "Copy failed — send the error code above"; }
+  finally { button.disabled = false; }
 });
 hideControlsButton.addEventListener("click", async () => {
   try {
@@ -187,7 +185,7 @@ document.getElementById("show-app-icon").addEventListener("change", async event 
   } catch { showError("Could not change the app icon setting."); }
 });
 
-document.getElementById("reload").addEventListener("click", () => api.reload());
+document.getElementById("reload").addEventListener("click", () => { void runOpen(() => api.reload()); });
 hideButton.addEventListener("click", () => {
   if (!hideButton.disabled) api.hide();
 });
@@ -246,7 +244,7 @@ if (api) {
   });
 } else {
   applyStatus({});
-  openButton.disabled = true;
+  retryButton.disabled = true;
   pinCheckbox.disabled = true;
   clickThroughCheckbox.disabled = true;
   opacityUp.disabled = true;
