@@ -18,7 +18,7 @@ output.mkdir(exist_ok=True)
 extension_version = None if args.viewer_only else json.loads((root / "manifest.json").read_text(encoding="utf-8"))["version"]
 desktop = root / "desktop-viewer"
 desktop_version = json.loads((desktop / "package.json").read_text(encoding="utf-8"))["version"]
-extension_files = ["manifest.json", "background.js", "content.js", "page-hook.js", "popup.html", "popup.js", "popup.css", "server/markdown.js"]
+extension_files = ["manifest.json", "background.js", "content.js", "page-hook.js", "popup.html", "popup.js", "popup.css", "server/markdown.js", "clipboard-bridge.js", "clipboard-offscreen.html", "clipboard-offscreen.js"]
 
 def package(name, base, files, instructions):
     target = output / name
@@ -31,14 +31,20 @@ def package(name, base, files, instructions):
         assert not any(Path(name).name in {"config.js", ".env"} for name in archive.namelist())
         assert all(name in archive.namelist() for name in files)
     print(target.name)
+    return target
 
 if not args.viewer_only:
-    package(f"LiveWorkspace-extension-{extension_version}.zip", root, extension_files,
+    extension_archive = package(f"LiveWorkspace-extension-{extension_version}.zip", root, extension_files,
         "Extract into a permanent folder. Open chrome://extensions, enable Developer mode, and choose Load unpacked.\n"
         "Select the extracted folder. Open the extension popup > Connection settings.\n"
         "To update an existing installation, replace files in its original extension folder, reload it in chrome://extensions, and refresh ChatGPT. Do not load a second copy.\n"
         "Set https://live-server-app.onrender.com and paste STREAM_KEY from your own Render service. Save, then Test delivery.\n"
-        "Refresh ChatGPT and ask a new question. Never share your publishing key.\n")
+        "Refresh ChatGPT and ask a new question. Never share your publishing key.\n"
+        "For meeting captions, approve the new clipboard-writing permission if Chrome asks. Refresh the Meeting transcript page and turn on Auto-copy. Finished captions copy while you use ChatGPT; paste with Ctrl+V (Windows) or Cmd+V (Mac). The extension does not read your clipboard or send prompts automatically.\n")
+    with extension_archive.open("rb") as source:
+        extension_digest = hashlib.file_digest(source, "sha256").hexdigest()
+    (output / f"LiveWorkspace-extension-{extension_version}-SHA256SUMS.txt").write_text(
+        f"{extension_digest}  {extension_archive.name}\n", encoding="ascii")
 if args.extension_only:
     raise SystemExit(0)
 shutil.copy2(root / "START-HERE.md", output / "START-HERE.md")

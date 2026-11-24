@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Live Workspace",
-  "version": "5.4.1",
+  "version": "5.4.2",
+  "minimum_chrome_version": "116",
   "description": "Stream ChatGPT / Perplexity answers live to teammates",
   "action": {
     "default_title": "Live Workspace",
@@ -10,7 +11,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "clipboardWrite", "offscreen"],
   "host_permissions": [
     "http://localhost:8765/*",
     "https://localhost:8765/*",
@@ -19,6 +20,11 @@
     "wss://*.onrender.com/*"
   ],
   "content_scripts": [
+    {
+      "matches": ["https://*.onrender.com/transcripts", "http://localhost:8765/transcripts", "https://localhost:8765/transcripts", "http://127.0.0.1:8765/transcripts"],
+      "js": ["clipboard-bridge.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": [
         "https://chatgpt.com/*",

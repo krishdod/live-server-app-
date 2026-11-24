@@ -12,7 +12,7 @@ routes before using this feature; it is separate from the existing answer viewer
 ## Current release
 
 - Viewer 1.6.0: bundled server address, automatic connection, bounded retries, clearer connection diagnostics, patched Electron runtime, and Windows setup/portable packages. Compact controls, translucent backgrounds and opaque text remain available after approval.
-- Browser extension 5.4.1: live capture, stale-history protection, safe handoff from completed streams to visible replies, persistent connection settings and a delivery test that does not change the shared answer.
+- Browser extension 5.4.2: live capture and automatic copying of finished meeting captions while you use ChatGPT. Adds clipboard-writing permission and a background helper; it never reads the clipboard. Existing capture protections, connection settings and answer delivery remain available.
 - Node relay: formatted live updates, owner approval, revocation and recovery from stalled connections.
 
 Local packages are generated in `releases/`. Recipients use the Windows setup EXE or the universal Mac DMG built by GitHub Actions. The app includes its runtime and needs no URL entry. Mac test packages are ad-hoc signed; Developer ID signing and notarization are a separate distribution requirement. Old Mac source ZIPs are not recipient installers.

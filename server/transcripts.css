@@ -31,7 +31,9 @@ form { display:grid; gap:18px; }
 .turn-header button { margin-left:auto; min-height:36px; padding:8px 12px; font-size:14px; }
 .turn p { margin:10px 0 0; font-size:16px; line-height:1.6; overflow-wrap:anywhere; white-space:pre-wrap; }
 #draft { padding:16px; border:1px dashed var(--ui-line); border-radius:7px; color:var(--ui-muted); overflow-wrap:anywhere; }
-.feed-actions { display:flex; align-items:center; gap:20px; margin-top:20px; }
+.feed-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px 20px; margin-top:20px; }
+#autoCopy[aria-pressed="true"] { background:var(--ui-accent); color:var(--ui-accent-ink); border-color:transparent; }
+#clipboardStatus.error { color:var(--ui-danger); }
 aside { border-top:1px solid var(--ui-line); padding-top:20px; }
 #notice { min-height:24px; color:var(--ui-muted); font-size:14px; margin-top:24px; }
 #notice.error { color:var(--ui-danger); }

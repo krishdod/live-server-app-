@@ -24,9 +24,17 @@ currently deployed version until the new server files are deployed. A 404 on
    with Speaker 1 / Speaker 2 labels. Short phrases may be **Unknown**.
 5. Select a label under **Speakers**, enter a name and click **Save name**.
    Correct individual phrases using their speaker menus.
-6. Click **Copy** beside a phrase, paste it into ChatGPT, review it and send.
-   Nothing is submitted automatically. The existing extension still delivers
-   ChatGPT answers through the separate answer stream.
+6. Update the helper's Live Workspace extension to **5.4.2 or later**, reload it
+   at `chrome://extensions`, and refresh this transcript page. Turn on
+   **Auto-copy** once. The newest finished captions, including speaker labels,
+   will copy automatically while you use ChatGPT. Paste with **Ctrl+V** on Windows
+   or **Cmd+V** on Mac, review and send. New phrases replace the clipboard;
+   drafts and edits to old speaker labels do not trigger copying. Auto-copy
+   resets when you switch sessions, sign out or close the page. Turn it off to
+   keep your clipboard unchanged. Manual **Copy** buttons remain available.
+   The extension needs clipboard-writing permission; it does not read your
+   existing clipboard. Nothing is pasted or submitted to ChatGPT automatically.
+   ChatGPT answers still use the separate answer stream.
 7. Click **End & erase** when finished. This removes the transcript from the
    server and invalidates the sender. Signing out only signs out this tab.
 

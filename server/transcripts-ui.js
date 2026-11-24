@@ -3,6 +3,10 @@
   const $ = id => document.getElementById(id);
   let key = sessionStorage.getItem("lw-key") || "", gate = sessionStorage.getItem("lw-gate") || "";
   let session = "", cursor = 0, names = {}, turns = new Map(), timer, active = true, generation = 0, busy = false;
+  let autoCopyEnabled = false, copyEpoch = 0, clipboardConnecting = false, receivedSnapshot = false, clipboardId = 0;
+  let clipboardQueue = Promise.resolve();
+  const clipboardRequests = new Map();
+  const clipboardChannel = "lw-transcript-clipboard-v1";
   const notice = (text, error = false) => { $("notice").textContent = text; $("notice").classList.toggle("error", error); };
   async function api(path, body) {
     const response = await fetch(`/api/transcripts/${path}`, { method: body ? "POST" : "GET", cache:"no-store",
@@ -13,6 +17,7 @@
     return data;
   }
   function logout(clear = true) {
+    receivedSnapshot = false; stopAutoCopy();
     generation++; clearTimeout(timer); session = ""; cursor = 0; turns.clear(); $("turns").replaceChildren();
     $("draft").textContent = ""; $("dashboard").hidden = true; $("login").hidden = false;
     names = {}; $("code").textContent = ""; $("sessions").replaceChildren(); $("speakerName").value = "";
@@ -20,8 +25,56 @@
   }
   const speakerName = id => names[id] || (id === "unknown" ? "Unknown" : id === "local" ? "Meeting host" : `Speaker ${id.split("-")[1]}`);
   async function copy(text) { try { await navigator.clipboard.writeText(text); notice("Copied. Paste into ChatGPT when ready."); } catch { notice("Clipboard unavailable. Select the text and copy it manually.", true); } }
-  function reset(id) { generation++; clearTimeout(timer); session = id; cursor = 0; names = {}; turns.clear(); $("turns").replaceChildren(); $("draft").hidden = true; $("copyLatest").disabled = true; $("speakerName").value = ""; sessionStorage.setItem("lw-transcript-session", id); }
+  function clipboardStatus(text, error = false) { $("clipboardStatus").textContent = text; $("clipboardStatus").classList.toggle("error", error); }
+  function stopAutoCopy(message = "Auto-copy off. Click to copy new finished captions automatically.", error = false) {
+    autoCopyEnabled = false; clipboardConnecting = false; copyEpoch++;
+    $("autoCopy").textContent = "Auto-copy off"; $("autoCopy").setAttribute("aria-pressed", "false");
+    $("autoCopy").disabled = !receivedSnapshot; clipboardStatus(message, error);
+  }
+  function clipboardRequest(operation, text) {
+    return new Promise((resolve, reject) => {
+      const id = ++clipboardId;
+      const timeout = setTimeout(() => { clipboardRequests.delete(id); reject(new Error("Update Live Workspace to extension 5.4.2 or later, reload it, then refresh this page.")); }, 5000);
+      clipboardRequests.set(id, {resolve,reject,timeout});
+      window.postMessage({channel:clipboardChannel,direction:"request",id,operation,text}, location.origin);
+    });
+  }
+  window.addEventListener("message", event => {
+    const data = event.data;
+    if (event.source !== window || event.origin !== location.origin || data?.channel !== clipboardChannel || data.direction !== "response") return;
+    const pending = clipboardRequests.get(data.id); if (!pending) return;
+    clipboardRequests.delete(data.id); clearTimeout(pending.timeout);
+    if (data.ok === true) pending.resolve(); else pending.reject(new Error(data.error || "Clipboard unavailable. Reload the extension and refresh this page."));
+  });
+  function autoCopyTurns(items) {
+    if (!autoCopyEnabled || !items.length) return;
+    const epoch = copyEpoch, current = generation;
+    const text = items.map(turn => `${speakerName(turn.speaker)}: ${turn.text}`).join("\n\n");
+    clipboardQueue = clipboardQueue.catch(() => {}).then(async () => {
+      if (!autoCopyEnabled || epoch !== copyEpoch || current !== generation || !active) return;
+      try {
+        await clipboardRequest("copy", text);
+        if (autoCopyEnabled && epoch === copyEpoch && current === generation) clipboardStatus("Copied finished captions. Paste into ChatGPT with Ctrl+V or Cmd+V.");
+      } catch (error) { if (epoch === copyEpoch && current === generation) stopAutoCopy(error.message, true); }
+    });
+  }
+  async function toggleAutoCopy() {
+    if (autoCopyEnabled) { stopAutoCopy(); return; }
+    if (clipboardConnecting || !receivedSnapshot) return;
+    const current = generation, epoch = ++copyEpoch;
+    clipboardConnecting = true; $("autoCopy").disabled = true; clipboardStatus("Connecting to the clipboard extension…");
+    try {
+      await clipboardRequest("check");
+      if (current !== generation || epoch !== copyEpoch || !active) return;
+      autoCopyEnabled = true; $("autoCopy").textContent = "Auto-copy on"; $("autoCopy").setAttribute("aria-pressed", "true");
+      clipboardStatus("Auto-copy on. New finished captions will replace your clipboard, even while you use ChatGPT.");
+      const latest = [...turns.values()].at(-1); if (latest) autoCopyTurns([latest]);
+    } catch (error) { if (current === generation && epoch === copyEpoch) stopAutoCopy(error.message, true); }
+    finally { if (current === generation) { clipboardConnecting = false; $("autoCopy").disabled = !receivedSnapshot; } }
+  }
+  function reset(id) { generation++; clearTimeout(timer); receivedSnapshot = false; stopAutoCopy(); session = id; cursor = 0; names = {}; turns.clear(); $("turns").replaceChildren(); $("draft").hidden = true; $("copyLatest").disabled = true; $("speakerName").value = ""; sessionStorage.setItem("lw-transcript-session", id); }
   function showSnapshot(data) {
+    const freshTurns = data.turns.filter(turn => !turns.has(turn.id));
     names = data.names;
     const selected = $("sessions").selectedOptions[0];
     if (selected) selected.textContent = `${data.sender || "Waiting for sender"} · ${new Date(data.createdAt).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;
@@ -59,6 +112,8 @@
     $("empty").hidden = turns.size > 0;
     $("empty").textContent = data.paired ? "Ready for speech. Final phrases appear here; drafts appear below." : "Enter the pairing code on the meeting computer, then choose Start captions.";
     $("copyLatest").disabled = turns.size === 0;
+    receivedSnapshot = true; $("autoCopy").disabled = clipboardConnecting;
+    autoCopyTurns(freshTurns);
   }
   async function poll() {
     const current = generation;
@@ -89,10 +144,11 @@
   $("sessions").addEventListener("change", () => { reset($("sessions").value); poll(); });
   $("copyCode").addEventListener("click", () => copy($("code").textContent));
   $("copyLatest").addEventListener("click", () => { const turn = [...turns.values()].at(-1); if (turn) copy(`${speakerName(turn.speaker)}: ${turn.text}`); });
+  $("autoCopy").addEventListener("click", toggleAutoCopy);
   $("speaker").addEventListener("change", () => { $("speakerName").value = names[$("speaker").value] || ""; });
   const localOption = document.createElement("option"); localOption.value = "local"; localOption.textContent = "Meeting host"; $("speaker").append(localOption);
   $("rename").addEventListener("submit", event => { event.preventDefault(); action(async () => { await api("sessions",{action:"rename",id:session,speaker:$("speaker").value,name:$("speakerName").value}); notice("Speaker name saved."); }); });
   $("signout").addEventListener("click", () => { logout(); notice("Signed out in this tab. Existing sessions still expire after 2 hours."); });
-  window.addEventListener("pagehide", () => { active = false; clearTimeout(timer); });
+  window.addEventListener("pagehide", () => { active = false; clearTimeout(timer); stopAutoCopy(); });
   if (key) load().catch(error => notice(error.message,true)); else { logout(false); notice("Use your owner key to receive meeting captions."); }
 })();

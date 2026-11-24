@@ -37,7 +37,7 @@ async function settle() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-function createWorker({ disk = {}, answer = async () => response(200), configPresent = true } = {}) {
+function createWorker({ disk = {}, answer = async () => response(200), configPresent = true, clipboardWrite = async () => {}, directClipboard = false } = {}) {
   const requests = [];
   const warnings = [];
   const alarms = [];
@@ -47,10 +47,12 @@ function createWorker({ disk = {}, answer = async () => response(200), configPre
   let timerId = 0;
   let activePosts = 0;
   let maxActivePosts = 0;
+  const clipboard = [], offscreen = {open:false,created:0,closed:0};
   const context = vm.createContext({
     ...(configPresent ? { SERVER_URL: SERVER + "/", STREAM_KEY: KEY } : {}),
     importScripts(filename) { assert.equal(filename, "config.js"); if (!configPresent) throw new Error("No bundled config"); },
     URL,
+    navigator: directClipboard ? {clipboard:{async writeText(text) { await clipboardWrite(text); clipboard.push(text); }}} : {},
     AbortController,
     console: { warn(...args) { warnings.push(args); } },
     setTimeout(fn) { timers.set(++timerId, fn); return timerId; },
@@ -65,11 +67,18 @@ function createWorker({ disk = {}, answer = async () => response(200), configPre
         }
       },
       runtime: {
+        id: "test-extension",
         getURL: filename => `chrome-extension://test-extension/${filename}`,
+        async getContexts() { return offscreen.open ? [{}] : []; },
+        async sendMessage(message) { assert.equal(message.target,"lw-clipboard-offscreen"); await clipboardWrite(message.text); clipboard.push(message.text); return {ok:true}; },
         onMessage,
         onConnect: event(),
         onInstalled: event(),
         onStartup: event()
+      },
+      offscreen: {
+        async createDocument(options) { assert.equal(options.url,"clipboard-offscreen.html"); assert.deepEqual([...options.reasons],["CLIPBOARD"]); offscreen.open=true; offscreen.created++; },
+        async closeDocument() { offscreen.open=false; offscreen.closed++; }
       },
       alarms: {
         onAlarm,
@@ -90,7 +99,7 @@ function createWorker({ disk = {}, answer = async () => response(200), configPre
   });
   vm.runInContext(workerSource, context, { filename: "background.js" });
   return {
-    disk, requests, warnings, alarms,
+    disk, requests, warnings, alarms, clipboard, offscreen,
     get posts() { return requests.filter((request) => request.method === "POST"); },
     get maxActivePosts() { return maxActivePosts; },
     async message(message, sender = { url: "chrome-extension://test-extension/popup.html" }) {
@@ -105,6 +114,39 @@ function createWorker({ disk = {}, answer = async () => response(200), configPre
     }
   };
 }
+
+const transcriptSender = {id:"test-extension",url:SERVER+"/transcripts",frameId:0,tab:{id:7}};
+test("finished captions copy through a background helper without posting or persisting them", async () => {
+  const worker = createWorker(); await settle();
+  assert.equal((await worker.message({type:"transcript-clipboard",operation:"check"},transcriptSender)).ok,true);
+  assert.equal(worker.clipboard.length,0);
+  assert.equal((await worker.message({type:"transcript-clipboard",operation:"copy",text:"Alex: How does it work?"},transcriptSender)).ok,true);
+  assert.deepEqual(worker.clipboard,["Alex: How does it work?"]);
+  assert.equal(worker.offscreen.created,1); assert.equal(worker.offscreen.closed,1);
+  assert.equal(worker.posts.length,0); assert.equal(JSON.stringify(worker.disk).includes("How does it work?"),false);
+});
+test("only the configured transcript page in a top-level extension tab may copy captions", async () => {
+  const worker = createWorker(); await settle();
+  for (const sender of [{...transcriptSender,url:"https://evil.example/transcripts"},{...transcriptSender,url:SERVER+"/access"},
+    {...transcriptSender,frameId:1},{...transcriptSender,tab:undefined},{...transcriptSender,id:"other-extension"}]) {
+    assert.equal((await worker.message({type:"transcript-clipboard",operation:"copy",text:"must not copy"},sender)).ok,false);
+  }
+  assert.deepEqual(worker.clipboard,[]);
+});
+test("clipboard errors are reported and the hidden helper is cleaned up", async () => {
+  const worker = createWorker({clipboardWrite:async()=>{throw new Error("denied");}}); await settle();
+  const result=await worker.message({type:"transcript-clipboard",operation:"copy",text:"caption"},transcriptSender);
+  assert.equal(result.ok,false); assert.match(result.error,/Clipboard access failed/);
+  assert.equal(worker.offscreen.closed,1);
+});
+test("newer Chrome can copy directly and concurrent clipboard writes remain ordered", async () => {
+  const first=deferred(); let count=0;
+  const worker=createWorker({directClipboard:true,clipboardWrite:async()=>{if(++count===1)await first.promise;}}); await settle();
+  const a=worker.message({type:"transcript-clipboard",operation:"copy",text:"first"},transcriptSender);
+  const b=worker.message({type:"transcript-clipboard",operation:"copy",text:"latest"},transcriptSender);
+  await settle(); assert.equal(count,1); first.resolve(); await Promise.all([a,b]);
+  assert.deepEqual(worker.clipboard,["first","latest"]); assert.equal(worker.offscreen.created,0);
+});
 
 test("a healthy server does not conceal a rejected delivery key", async () => {
   const worker = createWorker({ answer: async () => response(403) });

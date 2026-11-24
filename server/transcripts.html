@@ -35,8 +35,9 @@
           <p id="empty">Create a session, then share its pairing code with the person running the meeting.</p>
           <ol id="turns"></ol>
           <p id="draft" hidden></p>
-          <div class="feed-actions"><button id="copyLatest" type="button" disabled>Copy latest phrase</button><a class="nav-link" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Open ChatGPT</a></div>
-          <p class="help">Copy a phrase, paste it into ChatGPT, then send when ready. Your answer stream continues separately.</p>
+          <div class="feed-actions"><button id="autoCopy" class="secondary" type="button" aria-pressed="false" disabled>Auto-copy off</button><button id="copyLatest" type="button" disabled>Copy latest phrase</button><a class="nav-link" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Open ChatGPT</a></div>
+          <p id="clipboardStatus" class="help" role="status" aria-live="polite">Turn on Auto-copy with extension 5.4.2 or later. New finished captions replace your clipboard, ready to paste.</p>
+          <p class="help">Paste into ChatGPT with Ctrl+V on Windows or Cmd+V on Mac, then send when ready. Your answer stream continues separately.</p>
         </section>
         <aside>
           <h2>Speakers</h2><p class="help">Labels are estimates. Rename a voice when you recognize it, or correct a phrase using its speaker menu. Short or overlapping speech may be Unknown.</p>

@@ -23,6 +23,42 @@ let savePromise = Promise.resolve();
 let settingsChange = null;
 let reconfiguring = false;
 const activeRequests = new Set();
+let clipboardQueue = Promise.resolve();
+
+async function transcriptClipboard(msg, sender) {
+  await ready;
+  function trustedPage() {
+    try {
+      const url = new URL(sender.url);
+      return sender.id === chrome.runtime.id && Number.isInteger(sender.tab?.id) && sender.frameId === 0 &&
+        url.origin === BASE_URL && url.pathname === "/transcripts";
+    } catch { return false; }
+  }
+  if (!trustedPage()) return { ok:false, error:"Open Meeting transcript on the server configured in this extension." };
+  if (msg.operation === "check") return { ok:true };
+  if (msg.operation !== "copy" || typeof msg.text !== "string" || !msg.text.trim() || msg.text.length > 500000) {
+    return { ok:false, error:"Invalid caption text." };
+  }
+  const run = async () => {
+    if (!trustedPage()) return { ok:false, error:"Connection settings changed. Reopen Meeting transcript." };
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(msg.text);
+      } else {
+        const url = chrome.runtime.getURL("clipboard-offscreen.html");
+        const contexts = await chrome.runtime.getContexts({contextTypes:["OFFSCREEN_DOCUMENT"],documentUrls:[url]});
+        if (!contexts.length) await chrome.offscreen.createDocument({url:"clipboard-offscreen.html",reasons:["CLIPBOARD"],justification:"Copy finalized meeting captions while the helper uses ChatGPT."});
+        try {
+          const result = await chrome.runtime.sendMessage({target:"lw-clipboard-offscreen",type:"copy-text",text:msg.text});
+          if (!result?.ok) throw new Error("Clipboard write failed");
+        } finally { await chrome.offscreen.closeDocument().catch(() => {}); }
+      }
+      return { ok:true };
+    } catch { return { ok:false, error:"Clipboard access failed. Reload the extension and refresh Meeting transcript." }; }
+  };
+  clipboardQueue = clipboardQueue.catch(() => {}).then(run);
+  return clipboardQueue;
+}
 
 function connectionOrigin(raw) {
   const url = new URL(String(raw).trim());
@@ -202,7 +238,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ ok: true, server: BASE_URL });
     return;
   }
-  if (msg?.type === "status") task = getStatus();
+  if (msg?.type === "transcript-clipboard") task = transcriptClipboard(msg, _sender);
+  else if (msg?.type === "status") task = getStatus();
   else if (msg?.type === "save-connection") {
     if (_sender.url !== chrome.runtime.getURL("popup.html")) {
       sendResponse({ ok: false, error: "Open the extension popup to change connection settings." });
