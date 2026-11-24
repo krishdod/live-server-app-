@@ -205,7 +205,7 @@ class SenderApp:
                 recognizer = KaldiRecognizer(model, 48000)
                 if channel == "meeting":
                     recognizer.SetSpkModel(speaker)
-                stream = CaptionStream(recognizer, self.emit, speaker_override="local" if channel == "local" else None)
+                stream = CaptionStream(recognizer, lambda packet, source=channel: self.emit({**packet, "channel": source}), speaker_override="local" if channel == "local" else None)
                 stream.tracker = self.tracker
                 stream.samples = round(self.elapsed_ms * 48)
                 stream.start = self.elapsed_ms

@@ -87,6 +87,31 @@ class SenderTests(unittest.TestCase):
             self.assertTrue(sender.failed)
         finally: sender.close()
 
+    def test_drafts_coalesce_separately_for_meeting_and_microphone(self):
+        entered, release, delivered = threading.Event(), threading.Event(), threading.Event()
+        calls = []
+        def send(server, path, packet, token):
+            if not calls:
+                entered.set()
+                release.wait(2)
+            calls.append(dict(packet))
+            if packet["type"] == "final": delivered.set()
+            return {"ackSeq":packet["seq"]}
+        sender = TextSender("https://example.com", "test", send=send)
+        try:
+            sender.submit({"type":"status","state":"listening"})
+            self.assertTrue(entered.wait(1))
+            sender.submit({"type":"draft","channel":"meeting","text":"old remote draft"})
+            sender.submit({"type":"draft","channel":"local","text":"my draft"})
+            sender.submit({"type":"draft","channel":"meeting","text":"latest remote draft"})
+            sender.submit({"type":"final","channel":"local","text":"my final","speaker":"local","startedMs":0,"endedMs":1000})
+            release.set()
+            self.assertTrue(delivered.wait(2))
+            self.assertEqual([call.get("text") for call in calls], [None,"latest remote draft","my final"])
+        finally:
+            release.set()
+            sender.close()
+
 
 if __name__ == "__main__":
     unittest.main()

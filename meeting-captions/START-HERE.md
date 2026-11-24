@@ -40,7 +40,8 @@ currently deployed version until the new server files are deployed. A 404 on
    on this same output, so select the intended device.
 4. Optionally enable **Include my microphone (system default)** for your own
    voice. It is labeled **Meeting host**, separately from remote voices. Keep
-   the meeting app microphone set to your normal physical microphone.
+   the meeting app microphone set to your normal physical microphone. Use
+   headphones so it does not pick up the remote voices a second time.
 5. Click **Start captions**. Audio capture begins only after this action.
 6. Click **Stop captions** to stop. Keep the window open until queued phrases
    finish sending, then close it.

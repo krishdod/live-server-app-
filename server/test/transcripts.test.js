@@ -55,6 +55,18 @@ test("raw audio, bad labels and oversized packets are rejected without consuming
   assert.equal(store.ingest(token,{seq:1,type:"status",state:"stopped"}).ackSeq,1);
 });
 
+test("microphone finals do not discard the remote speaker's current draft", () => {
+  const store = new TranscriptStore(), session = store.create();
+  const { token } = store.pair(session.pairCode,"Meeting","ip");
+  store.ingest(token,{seq:1,type:"draft",channel:"meeting",text:"How would you design"});
+  store.ingest(token,{seq:2,type:"draft",channel:"local",text:"let me think"});
+  store.ingest(token,{seq:3,type:"final",channel:"local",speaker:"local",text:"let me think",startedMs:0,endedMs:1000});
+  assert.equal(store.snapshot(session.id).draft,"How would you design");
+  assert.equal(store.snapshot(session.id).turns[0].speaker,"local");
+  store.ingest(token,{seq:4,type:"status",state:"stopped"});
+  assert.equal(store.snapshot(session.id).draft,"");
+});
+
 test("history remains bounded and session capabilities cannot cross sessions", () => {
   const store = new TranscriptStore(), a = store.create(), b = store.create();
   const {token} = store.pair(a.pairCode,"A","ip");

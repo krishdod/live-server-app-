@@ -66,18 +66,19 @@ class TextSender:
 
     def submit(self, packet):
         # Explicit whitelist: numpy/audio/embedding objects cannot enter the relay.
-        allowed = {"type", "text", "speaker", "startedMs", "endedMs", "state"}
+        allowed = {"type", "text", "speaker", "startedMs", "endedMs", "state", "channel"}
         if set(packet) - allowed or packet.get("type") not in ("draft", "final", "status"):
             raise ValueError("Only transcript packets can be sent.")
         with self.condition:
             if self.closed or self.failed:
                 raise RelayError("Sender ended. Pair a new session.")
-            if packet["type"] == "draft" and self.queue and self.queue[-1]["type"] == "draft":
-                self.queue[-1] = dict(packet)
-            else:
-                if len(self.queue) >= 100:
-                    raise RelayError("Connection queue is full. Stop captions and restore your connection.")
-                self.queue.append(dict(packet))
+            if packet["type"] in ("draft", "final"):
+                channel = packet.get("channel", "meeting")
+                self.queue = deque(queued for queued in self.queue if not (
+                    queued["type"] == "draft" and queued.get("channel", "meeting") == channel))
+            if len(self.queue) >= 100:
+                raise RelayError("Connection queue is full. Stop captions and restore your connection.")
+            self.queue.append(dict(packet))
             self.condition.notify_all()
 
     def pending(self):

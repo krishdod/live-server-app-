@@ -31,7 +31,7 @@ class TranscriptStore {
     const row = { id, code: crypto.randomBytes(6).toString("hex").toUpperCase().match(/.{4}/g).join("-"),
       createdAt: this.now(), expiresAt: this.now() + TTL, pairExpiresAt: this.now() + PAIR_TTL,
       tokenHash: "", sender: "", state: "waiting", lastSeen: null, sequence: 0, packetHash: "",
-      version: 0, turns: [], draft: "", names: {}, chars: 0 };
+      version: 0, turns: [], draft: "", drafts: { meeting:"", local:"" }, names: {}, chars: 0 };
     this.sessions.set(id, row);
     return this.public(row);
   }
@@ -59,7 +59,8 @@ class TranscriptStore {
     const row = [...this.sessions.values()].find(row => row.tokenHash === tokenHash);
     if (!row) fail(403, "Sender access expired. Pair again.");
     if (!packet || typeof packet !== "object" || Array.isArray(packet) ||
-        Object.keys(packet).some(key => !["seq", "type", "text", "speaker", "startedMs", "endedMs", "state"].includes(key)) ||
+        Object.keys(packet).some(key => !["seq", "type", "text", "speaker", "startedMs", "endedMs", "state", "channel"].includes(key)) ||
+        (packet.channel !== undefined && !["meeting", "local"].includes(packet.channel)) ||
         !Number.isSafeInteger(packet.seq) || packet.seq < 1 || !["draft", "final", "status"].includes(packet.type)) fail(400, "Invalid transcript packet. Only transcript text is accepted.");
     const fingerprint = hash(JSON.stringify(packet));
     if (packet.seq === row.sequence && fingerprint === row.packetHash) return { ackSeq: row.sequence };
@@ -67,7 +68,7 @@ class TranscriptStore {
     if (packet.type === "status") {
       if (!["listening", "stopped"].includes(packet.state)) fail(400, "Invalid sender state.");
       row.state = packet.state;
-      if (packet.state === "stopped") row.draft = "";
+      if (packet.state === "stopped") row.drafts = { meeting:"", local:"" };
     } else {
       if (typeof packet.text !== "string" || packet.text.length > 4000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(packet.text)) fail(400, "Caption text must be at most 4000 characters.");
       if (packet.type === "final") {
@@ -78,10 +79,11 @@ class TranscriptStore {
           startedMs: packet.startedMs, endedMs: packet.endedMs, revision: row.version + 1 };
         row.turns.push(turn); row.chars += turn.text.length;
         while (row.turns.length > 300 || row.chars > 250000) row.chars -= row.turns.shift().text.length;
-        row.draft = "";
-      } else row.draft = packet.text;
+        row.drafts[packet.channel || "meeting"] = "";
+      } else row.drafts[packet.channel || "meeting"] = packet.text;
       row.state = "listening";
     }
+    row.draft = [row.drafts.meeting, row.drafts.local ? `Meeting host: ${row.drafts.local}` : ""].filter(Boolean).join("\n");
     row.sequence = packet.seq; row.packetHash = fingerprint; row.lastSeen = this.now(); row.version++;
     return { ackSeq: row.sequence };
   }
