@@ -6,14 +6,16 @@ const path = require('node:path');
 const { normalizeViewerUrl, allowedNavigation, isReadyViewer, supportsCaptureExclusion } = require('../policy');
 const { createViewer } = require('../main');
 
-function harness({ protection = true, shortcut = true, toolbarShortcut = shortcut, platform = 'win32', release = '10.0.26100' } = {}) {
-  const events = [], handlers = new Map();
+function harness({ protection = true, shortcut = true, toolbarShortcut = shortcut, platform = 'win32', release = '10.0.26100', createError = null, loadError = null, autoConnect = false, retryDelays = [], initialUrl, onLoad } = {}) {
+  const events = [], copied = [], handlers = new Map();
   class Contents extends EventEmitter {
     constructor() { super(); this.mainFrame = { url: '' }; this.dead = false; this.styles = new Map(); this.styleCount = 0; }
     async insertCSS(css) { const key = String(++this.styleCount); this.styles.set(key, css); return key; }
     async removeInsertedCSS(key) { this.styles.delete(key); }
     setWindowOpenHandler(fn) { this.popup = fn; }
     async loadURL(url) {
+      if (onLoad) await onLoad(this, url);
+      if (loadError) throw loadError;
       this.navigate(url);
       if (new URL(url).pathname === '/' && new URL(url).searchParams.get('role') === 'view') {
         this.setPageTitle('Live Workspace — Ready');
@@ -66,7 +68,7 @@ function harness({ protection = true, shortcut = true, toolbarShortcut = shortcu
     close() { this.emit('closed'); }
   }
   class View {
-    constructor(options) { this.options = options; this.webContents = new Contents(); }
+    constructor(options) { if (createError) throw createError; this.options = options; this.webContents = new Contents(); }
     setBounds(bounds) { this.bounds = bounds; }
     setBackgroundColor(value) { this.backgroundColor = value; }
   }
@@ -90,12 +92,91 @@ function harness({ protection = true, shortcut = true, toolbarShortcut = shortcu
     },
     unregister(key) { shortcuts.handlers.delete(key); }
   };
-  const controller = createViewer({ app: {}, BrowserWindow: Win, WebContentsView: View, globalShortcut: shortcuts,
+  const controller = createViewer({ app: {}, clipboard: { writeText: text => copied.push(text) }, BrowserWindow: Win, WebContentsView: View, globalShortcut: shortcuts,
     ipcMain: { handle: (name, fn) => handlers.set(name, fn), removeHandler: name => handlers.delete(name) },
     session: { fromPartition: () => ses }
-  }, { platform, release });
-  return { ...controller, events, ses, handlers, shortcuts };
+  }, { platform, release, autoConnect, retryDelays, initialUrl });
+  return { ...controller, events, ses, handlers, shortcuts, copied };
 }
+
+test('the local shell automatically connects once without receiving a URL from its renderer', async () => {
+  const c = harness({ autoConnect: true, initialUrl: 'https://example.com/access' });
+  c.window.webContents.emit('did-finish-load');
+  await c.openViewer();
+  c.window.webContents.emit('did-finish-load');
+  await Promise.resolve();
+  assert.equal(c.events.filter(e => e[0] === 'load').length, 1);
+  assert.equal(c.getView().webContents.getURL(), 'https://example.com/access');
+  const call = c.handlers.get('viewer:open');
+  await call({ sender: c.window.webContents, senderFrame: c.window.webContents.mainFrame }, 'https://untrusted.example/');
+  assert.equal(c.getView().webContents.getURL(), 'https://example.com/access');
+  c.window.close();
+});
+
+test('a transient ERR_FAILED retries a bounded number of times and concurrent retries share one operation', async () => {
+  let calls = 0;
+  const c = harness({ retryDelays: [0, 0], onLoad() {
+    if (++calls < 3) throw Object.assign(new Error('private URL'), { code: 'ERR_FAILED' });
+  } });
+  const first = c.openViewer('https://example.com/access');
+  assert.equal(c.openViewer('https://example.com/access'), first);
+  assert.equal((await first).ok, true);
+  assert.equal(calls, 3);
+  assert.equal(c.window.children.length, 1);
+  assert.equal(c.snapshot().opening, false);
+  assert.equal(c.snapshot().failure, null);
+  assert.equal(c.diagnosticDetails().attempts, 3);
+  c.window.close();
+});
+
+test('repeated failures stop after three attempts and remain available to the local error panel', async () => {
+  let calls = 0;
+  const c = harness({ retryDelays: [0, 0], onLoad() { calls++; throw { code: 'ERR_FAILED' }; } });
+  assert.equal((await c.openViewer('https://example.com/access')).ok, false);
+  assert.equal(calls, 3);
+  assert.equal(c.snapshot().failure.diagnostics.error.code, 'ERR_FAILED');
+  assert.equal(c.getView(), null);
+  c.window.close();
+});
+
+test('specific main-frame failures replace a generic error and certificate failures never auto-retry', async () => {
+  let calls = 0;
+  const c = harness({ retryDelays: [0, 0], onLoad(wc) {
+    calls++;
+    wc.emit('did-fail-load', {}, -202, 'net::ERR_CERT_AUTHORITY_INVALID', 'https://private.test/?key=secret', true);
+    throw { code: 'ERR_FAILED' };
+  } });
+  const result = await c.openViewer('https://example.com/access');
+  assert.equal(calls, 1);
+  assert.equal(result.diagnostics.error.code, 'ERR_CERT_AUTHORITY_INVALID');
+  assert.equal(result.diagnostics.error.errorNumber, -202);
+  assert.equal(JSON.stringify(result).includes('secret'), false);
+  c.window.close();
+});
+
+test('closing the window cancels a pending reconnect rather than creating another renderer', async () => {
+  let calls = 0;
+  const c = harness({ retryDelays: [60000], onLoad() { calls++; throw { code: 'ERR_FAILED' }; } });
+  const opening = c.openViewer('https://example.com/access');
+  await new Promise(resolve => setImmediate(resolve));
+  c.window.close();
+  assert.equal((await opening).ok, false);
+  assert.equal(calls, 1);
+});
+
+test('copied diagnostics classify proxy and health without leaking addresses, cookies or response bodies', async () => {
+  const c = harness();
+  c.ses.resolveProxy = async () => 'PROXY private-proxy.test:1234';
+  c.ses.fetch = async () => ({ status: 200, body: { cancel: async () => {} } });
+  const copy = c.handlers.get('viewer:diagnostics');
+  await copy({ sender: c.window.webContents, senderFrame: c.window.webContents.mainFrame });
+  const result = JSON.parse(c.copied[0]);
+  assert.equal(result.proxy, 'configured');
+  assert.equal(result.health.httpStatus, 200);
+  assert.equal(c.copied[0].includes('private-proxy'), false);
+  assert.equal(c.copied[0].includes('onrender.com'), false);
+  c.window.close();
+});
 
 test('viewer links preserve access query and hash without imposing an editor role', () => {
   const link = 'https://example.com/?role=view&key=test%2Bsecret#answer';
@@ -163,6 +244,28 @@ test('failed protection never loads the live page', async () => {
   assert.equal((await c.openViewer('https://example.com/')).ok, false);
   assert.equal(c.getView(), null);
   assert.equal(c.window.skipTaskbar, false);
+});
+
+test('a native page creation error returns safe diagnostics and leaves no broken child view', async () => {
+  const c = harness({ createError: new Error('private path and key must not be returned') });
+  const result = await c.openViewer('https://example.com/access');
+  assert.equal(result.ok, false);
+  assert.equal(result.diagnostics.error.code, 'APP_CREATE_VIEW');
+  assert.equal(c.getView(), null);
+  assert.equal(c.snapshot().interactivePage, true);
+  assert.equal(JSON.stringify(result).includes('private path'), false);
+  assert.equal(c.window.visible, true);
+});
+
+test('a network failure removes the failed page and keeps a usable reload target', async () => {
+  const error = Object.assign(new Error('https://example.com/?key=private'), { code: 'ERR_PROXY_CONNECTION_FAILED' });
+  const c = harness({ loadError: error });
+  const result = await c.openViewer('https://example.com/access');
+  assert.equal(result.diagnostics.error.code, 'ERR_PROXY_CONNECTION_FAILED');
+  assert.equal(c.getView(), null);
+  assert.equal(c.window.children.length, 0);
+  assert.equal(JSON.stringify(c.diagnosticDetails()).includes('private'), false);
+  assert.equal(c.snapshot().interactivePage, true);
 });
 
 test('losing protection on reload removes existing content and loads nothing further', async () => {
@@ -302,7 +405,7 @@ test('controls shortcut restores the panel and can hide it again without reconne
   assert.equal(view.bounds.y, 128);
   assert.equal(c.window.ignoreMouse, false);
   c.setLinkBarVisible(true);
-  assert.equal(view.bounds.y, 176);
+  assert.equal(view.bounds.y, 128);
   c.shortcuts.toolbar();
   assert.equal(c.snapshot().toolbarHidden, true);
   assert.equal(view.bounds.y, 44);

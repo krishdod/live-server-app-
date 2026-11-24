@@ -3,17 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=18"
+    "node": ">=24 <27"
   },
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "nodemailer": "^6.9.16",
-    "ws": "^8.18.0"
+    "nodemailer": "10.6.1",
+    "ws": "8.23.0"
   },
   "devDependencies": {
-    "jsdom": "26.1.0"
+    "jsdom": "31.0.1"
   }
 }

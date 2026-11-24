@@ -1,0 +1,20 @@
+Meeting Caption Sender 0.1.0 preview
+
+Vosk API and the bundled vosk-model-small-en-us-0.15 and vosk-model-spk-0.4
+models are licensed under Apache License 2.0. Model files are unchanged.
+Copyright Alpha Cephei Inc. and respective contributors.
+https://github.com/alphacep/vosk-api
+https://alphacephei.com/vosk/models
+The complete Apache license is included in APACHE-2.0.txt.
+
+SoundCard: BSD 3-Clause, Copyright (c) 2016 Bastian Bechtold.
+NumPy: BSD 3-Clause, Copyright NumPy Developers.
+Python: Python Software Foundation License.
+PyInstaller: GPL 2.0 with the bootloader exception permitting distribution of
+bundled applications under their own licenses.
+Package distributions and their original license/notice files are included
+in the bundle. See their *.dist-info directories and the Vosk model folders.
+
+Speaker labels are estimated per phrase, not verified participant identities.
+Audio and voice embeddings are processed in memory on the meeting computer.
+The relay receives only text, numeric timing and anonymous speaker labels.

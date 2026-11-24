@@ -1,0 +1,65 @@
+name: Build local meeting caption sender
+on:
+  workflow_dispatch:
+  push:
+    branches: ["codex/viewer-1.6.0-updates"]
+    paths: ["meeting-captions/**", ".github/workflows/build-caption-sender.yml"]
+  pull_request:
+    branches: ["main"]
+    paths: ["meeting-captions/**", ".github/workflows/build-caption-sender.yml"]
+permissions:
+  contents: read
+jobs:
+  sender:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows-x64
+          - runner: macos-15-intel
+            platform: mac-intel
+          - runner: macos-15
+            platform: mac-apple-silicon
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: meeting-captions/requirements.txt
+      - run: python -m pip install -r meeting-captions/requirements.txt pyinstaller==6.22.3
+      - run: python -m unittest -v test_caption_sender.py
+        working-directory: meeting-captions
+      - run: python meeting-captions/build.py
+      - name: Download public test fixture
+        run: python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/alphacep/vosk-api/master/python/example/test.wav','artifacts/meeting-captions/test.wav')"
+      - name: Verify bundled Windows recognition
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $captionProcess = Start-Process -FilePath 'releases/MeetingCaptionSender-0.1.0-preview.exe' -ArgumentList '--self-test artifacts/meeting-captions/test.wav --result artifacts/meeting-captions/packaged-recognition.json' -WindowStyle Hidden -PassThru -Wait
+          if ($captionProcess.ExitCode -ne 0) { throw 'Packaged recognition failed' }
+          if (!(Test-Path artifacts/meeting-captions/packaged-recognition.json)) { throw 'Recognition result missing' }
+          $captionUi = Start-Process -FilePath 'releases/MeetingCaptionSender-0.1.0-preview.exe' -ArgumentList '--ui-check artifacts/meeting-captions/packaged-ui.json' -WindowStyle Hidden -PassThru -Wait
+          if ($captionUi.ExitCode -ne 0) { throw 'Packaged window startup failed' }
+      - name: Verify and archive Mac app
+        if: runner.os == 'macOS'
+        run: |
+          codesign --verify --deep --strict releases/MeetingCaptionSender-0.1.0-preview.app
+          releases/MeetingCaptionSender-0.1.0-preview.app/Contents/MacOS/MeetingCaptionSender-0.1.0-preview --self-test artifacts/meeting-captions/test.wav --result artifacts/meeting-captions/packaged-recognition.json
+          releases/MeetingCaptionSender-0.1.0-preview.app/Contents/MacOS/MeetingCaptionSender-0.1.0-preview --ui-check artifacts/meeting-captions/packaged-ui.json
+          ditto -c -k --sequesterRsrc --keepParent releases/MeetingCaptionSender-0.1.0-preview.app releases/MeetingCaptionSender-0.1.0-preview-${{ matrix.platform }}.zip
+      - name: Verify public-fixture transcript and speaker stability
+        run: python -c "import json; r=json.load(open('artifacts/meeting-captions/packaged-recognition.json')); p=r['packets']; assert 'one zero zero zero one' in p[0]['text']; assert p[0]['speaker']==p[-1]['speaker']=='speaker-1'; assert p[1]['speaker']=='unknown'; assert json.load(open('artifacts/meeting-captions/packaged-ui.json'))['passed']; print('Packaged local recognition and window startup passed')"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: meeting-caption-sender-${{ matrix.platform }}
+          path: |
+            releases/MeetingCaptionSender-0.1.0-preview.exe
+            releases/MeetingCaptionSender-0.1.0-preview-*.zip
+            artifacts/meeting-captions/packaged-recognition.json
+            artifacts/meeting-captions/packaged-ui.json
+          if-no-files-found: error

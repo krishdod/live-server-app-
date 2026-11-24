@@ -11,6 +11,8 @@ const settings = document.getElementById("settings");
 const serverInput = document.getElementById("serverInput");
 const keyInput = document.getElementById("keyInput");
 const settingsNotice = document.getElementById("settingsNotice");
+const manifestVersion = chrome.runtime.getManifest?.()?.version;
+if (manifestVersion) document.querySelector(".version").textContent = manifestVersion;
 let settingsLoaded = false;
 
 function setDelivery(result) {

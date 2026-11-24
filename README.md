@@ -4,13 +4,18 @@ Stream formatted answers from ChatGPT or Perplexity into an owner-approved deskt
 
 **[Start here](START-HERE.md)** for installation, connection settings and the first successful answer.
 
+**Meeting captions (preview):** a local English caption sender can relay text and
+estimated speaker labels to the helper through a separate channel. See
+[setup and limitations](meeting-captions/START-HERE.md). Deploy the new server
+routes before using this feature; it is separate from the existing answer viewer.
+
 ## Current release
 
-- Windows viewer 1.5.1: compact controls, translucent reading surface, opaque text, connection status, Copy, local Clear, themes, explicit hide/show and an optional taskbar icon. The approved viewer hides its icon by default while the window stays visible.
-- Browser extension 5.4: live capture, newest-answer delivery queue, persistent connection settings and a delivery test that does not change the shared answer.
+- Viewer 1.6.0: bundled server address, automatic connection, bounded retries, clearer connection diagnostics, patched Electron runtime, and Windows setup/portable packages. Compact controls, translucent backgrounds and opaque text remain available after approval.
+- Browser extension 5.4.1: live capture, stale-history protection, safe handoff from completed streams to visible replies, persistent connection settings and a delivery test that does not change the shared answer.
 - Node relay: formatted live updates, owner approval, revocation and recovery from stalled connections.
 
-Local packages are generated in `releases/`. The Windows executable and extension ZIP are ready to use after configuration. The Mac ZIP contains source and a launcher; it is not a signed Mac installer.
+Local packages are generated in `releases/`. Recipients use the Windows setup EXE or the universal Mac DMG built by GitHub Actions. The app includes its runtime and needs no URL entry. Mac test packages are ad-hoc signed; Developer ID signing and notarization are a separate distribution requirement. Old Mac source ZIPs are not recipient installers.
 
 ## Connect the browser extension
 
@@ -39,7 +44,8 @@ For local development, set unique test keys and run `npm start` in `server/`. Th
 - `server/`: relay, website, approval flow and formatting.
 - `desktop-viewer/`: Electron viewer and its native integration checks.
 - `caption-copier-fix/`: the separate caption-to-ChatGPT app, preserved with its source.
-- `scripts/package-releases.py`: builds extension and Mac-source ZIPs from current source only.
+- `scripts/package-releases.py`: builds extension/share ZIPs, recipient notes and release checksums, without credentials.
+- `.github/workflows/build-viewer.yml`: builds Windows packages and universal Mac DMG/ZIP artifacts on their native operating systems.
 - `tests/`: capture, transport and popup regressions.
 - `artifacts/`: ignored current test evidence; historical delivery copies have been removed.
 

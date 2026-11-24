@@ -1,0 +1,4 @@
+vosk==0.3.45; sys_platform != 'darwin'
+vosk==0.3.44; sys_platform == 'darwin'
+SoundCard==0.4.6
+numpy==1.26.4

@@ -5,12 +5,12 @@ A compact, owner-approved live reading window for Windows and macOS. See [START-
 ## Open the viewer
 
 1. Close any older viewer with Close or End.
-2. Run `releases/LiveWorkspaceViewer-1.5.1-portable.exe` on Windows.
-3. Choose Open. The default page is `https://live-server-app.onrender.com/access`.
+2. Run `releases/LiveWorkspaceViewer-1.6.0-setup.exe` on Windows, or install the bundled universal Mac DMG from the build workflow.
+3. The app automatically opens `https://live-server-app.onrender.com/access`. No URL entry, Node.js installation or Open click is required.
 4. Enter your name and give the request code to the owner. The owner approves it in Viewer access.
 5. The window stays visible after approval. A 44px control bar replaces the setup panel.
 
-The app has separate cookies from Chrome. Approval lasts only for this app session; closing it requires a new request. It makes no network connection until Open is chosen. The browser extension publishes answers; this app reads them.
+The app has separate cookies from Chrome. Approval lasts only for this app session; closing it requires a new request. It connects automatically on launch. The browser extension publishes answers; this app reads them.
 
 ## Reading and controls
 
@@ -31,6 +31,8 @@ Use Control+Option for these shortcuts on macOS. If a shortcut is unavailable, t
 
 If the background is solid, confirm that an older app has been closed, finish approval, and check the percentage in the compact bar. Approval and sign-in forms intentionally stay solid.
 
+Temporary connection errors retry up to twice, within a 90-second overall loading deadline. Certificate and policy errors require attention rather than automatic retries. Use **Retry connection** to try again. **Copy error details** includes app/OS versions, attempt count, main-frame/network failure codes when available, a proxy classification and an HTTP health status. It excludes links, keys, cookies, local paths and answer text. No TLS checks, sandbox restrictions or capture requirements are bypassed. An approved Chrome session does not approve the app's separate session.
+
 ## Capture protection
 
 The app requests capture exclusion with Electron’s content protection API. Windows requires version 10 build 19041 or newer. The app does not load remote content when protection cannot be enabled.
@@ -48,9 +50,9 @@ npm.cmd ci
 npm.cmd run dist
 ```
 
-The Windows executable is written to `../releases/`.
+The setup and portable Windows executables are written to `../releases/`. Building requires Node 24 or 26; recipients do not need Node.
 
-On a Mac with Node.js, run `bash start-mac.command`, or `npm ci` then `npm start`. Build Mac installers on a Mac with `npm run dist:mac`; configure Developer ID signing before distributing signed builds. The packaged Mac source is not a signed installer; Mac runtime behavior has not been verified in this Windows environment.
+On a development Mac, run `npm ci` then `npm start`. Build universal Mac installers on macOS with `npm run dist:mac`; GitHub Actions runs this on its Mac runner and verifies both executable architectures and the ad-hoc signature. Windows cannot build a Mac DMG with electron-builder. Test packages use ad-hoc signing; configure Developer ID signing and notarization for public distribution. Native Mac behavior still needs a real Mac check. `start-mac.command` is only a source-development launcher.
 
 ## Verify
 

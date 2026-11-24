@@ -130,8 +130,9 @@ app.whenReady().then(async () => {
       track(view.webContents);
       return view;
     }
-  }, { showWindow: false, registerShortcut: false });
-  await viewer.openViewer(`http://127.0.0.1:${relay.address().port}/?role=view&key=fixture`);
+  }, { showWindow: false, registerShortcut: false, autoConnect: false });
+  const opened = await viewer.openViewer(`http://127.0.0.1:${relay.address().port}/?role=view&key=fixture`);
+  assert.equal(opened.ok, true, JSON.stringify(opened));
   const page = viewer.getView().webContents;
   for (let i = 0; i < 80; i++) {
     if (await page.executeJavaScript(`document.querySelector('#answer strong')?.textContent === 'This text must remain readable.'`)) break;

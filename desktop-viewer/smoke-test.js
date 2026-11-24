@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
     socket.send(JSON.stringify({ type: 'sync', from: 'server', text: '## Viewer test\n\n**Streaming works.**\n\n- First item\n- Second item' }));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  controller = createViewer(electron, { showWindow: false, registerShortcut: false });
+  controller = createViewer(electron, { showWindow: false, registerShortcut: false, autoConnect: false });
   assert.equal(controller.snapshot().protection, true);
   const result = await controller.openViewer(`http://127.0.0.1:${server.address().port}/?role=view&key=local-test-only`);
   assert.equal(result.ok, true);

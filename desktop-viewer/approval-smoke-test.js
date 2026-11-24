@@ -7,7 +7,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const assert = require("node:assert/strict");
-const { createViewer, TOOLBAR_SHORTCUT } = require("./main");
+const fixtureAppRoot = process.env.LW_SMOKE_APP_ROOT || __dirname;
+const { createViewer, TOOLBAR_SHORTCUT } = require(path.join(fixtureAppRoot, "main.js"));
 
 const output = path.join(__dirname, "../artifacts/approval-checks");
 fs.mkdirSync(output, { recursive: true });
@@ -80,7 +81,11 @@ app.whenReady().then(async () => {
   const shortcuts = new Map();
   const taskbarStates = [];
   const copiedAnswers = [];
-  viewer = createViewer({ ...require("electron"), clipboard: { writeText: text => copiedAnswers.push(text) }, BrowserWindow: function (options) {
+  let rejectFirstView = true;
+  viewer = createViewer({ ...require("electron"), clipboard: { writeText: text => copiedAnswers.push(text) }, WebContentsView: function (options) {
+    if (rejectFirstView) { rejectFirstView = false; throw new Error("test-only native view creation failure"); }
+    return new (require("electron").WebContentsView)(options);
+  }, BrowserWindow: function (options) {
     const win = new BrowserWindow(options);
     const setSkipTaskbar = win.setSkipTaskbar.bind(win);
     win.setSkipTaskbar = value => { taskbarStates.push(value); setSkipTaskbar(value); };
@@ -92,12 +97,12 @@ app.whenReady().then(async () => {
       return true;
     },
     unregister(key) { shortcuts.delete(key); }
-  } }, { showWindow: false });
+  } }, { showWindow: false, initialUrl: `${base}/access`, retryDelays: [] });
   let hideCalls = 0;
   const nativeHide = viewer.window.hide.bind(viewer.window);
   viewer.window.hide = () => { hideCalls++; nativeHide(); };
   const toolbar = viewer.window.webContents;
-  await until(() => toolbar.executeJavaScript(`document.querySelector('#viewer-url')?.value === 'https://live-server-app.onrender.com/access'`), "default server link");
+  await until(() => toolbar.executeJavaScript(`Boolean(document.querySelector('#retry-connection')) && !document.querySelector('#viewer-url')`), "no address setup is required");
   async function verifyPanelLayout() {
     for (const width of [560, 880]) {
       viewer.window.setContentSize(width, 680);
@@ -109,7 +114,15 @@ app.whenReady().then(async () => {
     }
   }
   await verifyPanelLayout();
-  assert.equal((await viewer.openViewer(`${base}/access`)).ok, true);
+  await until(() => toolbar.executeJavaScript(`!document.querySelector('#connection-error').hidden && document.querySelector('#open-error').textContent.includes('APP_CREATE_VIEW')`), "native startup failure is visible with a specific code");
+  assert.equal(viewer.getView(), null);
+  await toolbar.executeJavaScript(`document.querySelector('#copy-error').click()`);
+  await until(() => copiedAnswers.length === 1, "recipient can copy safe error details");
+  assert.equal(JSON.parse(copiedAnswers[0]).error.code, "APP_CREATE_VIEW");
+  assert.equal(copiedAnswers[0].includes("smoke-owner-only"), false);
+  copiedAnswers.length = 0;
+  await toolbar.executeJavaScript(`document.querySelector('#retry-connection').click()`);
+  await until(() => viewer.getView(), "the Retry button recovers after automatic startup fails");
   const page = viewer.getView().webContents;
   await until(() => page.executeJavaScript(`document.querySelector('#notice')?.textContent === 'Request access to continue.'`), "initial access check");
   assert.equal(viewer.snapshot().interactivePage, true);
@@ -151,7 +164,7 @@ app.whenReady().then(async () => {
   assert.equal(viewer.snapshot().clickThrough, false);
   await verifyPanelLayout();
   await toolbar.executeJavaScript(`document.querySelector('#show-controls').click()`);
-  await until(() => toolbar.executeJavaScript(`getComputedStyle(document.querySelector('.toolbar')).display !== 'none' && document.querySelector('#open-form').hidden`), "controls shortcut restores compact panel");
+  await until(() => toolbar.executeJavaScript(`getComputedStyle(document.querySelector('.toolbar')).display !== 'none' && !document.querySelector('#viewer-url')`), "controls shortcut restores compact panel without address settings");
   assert.equal(viewer.getView().getBounds().y, 128);
   await verifyPanelLayout();
   await toolbar.executeJavaScript(`document.querySelector('#show-app-icon').checked = true; document.querySelector('#show-app-icon').dispatchEvent(new Event('change'))`);
@@ -213,6 +226,7 @@ app.whenReady().then(async () => {
     liveFormattedAnswer: true, reconnectRetainsApproval: true, revokedViaDashboard: true,
     oldLinkDenied: true, rendererIsolated: true, nativeCaptureFlag: true,
     newDefaultUrl: true, approvedToolbarCollapsed: true, compactStripLayout: true,
+    automaticStartup: true, noAddressEntry: true, startupErrorCode: true, safeDiagnosticsCopy: true, openRetryRecovery: true,
     approvalDoesNotHideWindow: true, approvedTaskbarIconHidden: true, taskbarSettingWorks: true,
     revocationRestoresTaskbarIcon: true, clickThroughOptIn: true,
     controlsButtonRestoresPanel: true, keyboardFocusVisible: true, revocationRestoresPanel: true,

@@ -1,10 +1,13 @@
 "use strict";
 const path = require("node:path");
 const os = require("node:os");
-const { pathToFileURL } = require("node:url");
-const { normalizeViewerUrl, allowedNavigation, isReadyViewer, supportsCaptureExclusion } = require("./policy");
+const { setTimeout: wait } = require("node:timers/promises");
+const { normalizeViewerUrl, allowedNavigation, isReadyViewer, supportsCaptureExclusion, trustedToolbar } = require("./policy");
 const { createAppearance, DEFAULT_BACKGROUND_OPACITY } = require("./appearance");
 const { createAppIcon } = require("./app-icon");
+const { describeOpenError } = require("./open-errors");
+const { DEFAULT_ACCESS_URL, RETRYABLE, networkCode, loadPage } = require("./connection");
+const APP_VERSION = require("./package.json").version;
 
 const HEADER_HEIGHT = 176;
 const COMPACT_HEADER_HEIGHT = 128;
@@ -18,14 +21,18 @@ const TOOLBAR_SHORTCUT = "Control+Alt+B";
 const OPACITY_STEP = 0.05;
 const MIN_OPACITY = 0.2;
 const MAX_OPACITY = 1;
-const CHANNELS = ["status", "open", "reload", "hide", "quit", "pin", "opacity", "clickThrough", "pointer", "linkBar", "toolbar", "copy", "clear", "theme", "icon"]
+const CHANNELS = ["status", "open", "reload", "hide", "quit", "pin", "opacity", "clickThrough", "pointer", "linkBar", "toolbar", "copy", "clear", "theme", "icon", "diagnostics"]
   .map(name => `viewer:${name}`);
 
 function createViewer(electron, options = {}) {
   const { app, BrowserWindow, WebContentsView, globalShortcut, ipcMain, session, screen } = electron;
   const supported = supportsCaptureExclusion(options.platform ?? process.platform, options.release ?? os.release());
   const homePath = path.join(__dirname, "home.html");
-  const homeUrl = pathToFileURL(homePath).href;
+  const initialUrl = normalizeViewerUrl(options.initialUrl || DEFAULT_ACCESS_URL);
+  let lastFailure = null;
+  let openingPromise = null;
+  let retryAbort = null;
+  let openAttempt = 0;
   let protectedContent = false;
   let shortcut = false;
   let pinShortcut = false;
@@ -39,9 +46,9 @@ function createViewer(electron, options = {}) {
   let clickThrough = false;
   let interactivePage = true;
   let pointerOverToolbar = true;
-  let linkHidden = false;
+  let linkHidden = true;
   let toolbarHidden = false;
-  let headerHeight = HEADER_HEIGHT;
+  let headerHeight = COMPACT_HEADER_HEIGHT;
   let pointerPoll = null;
   let statusPoll = null;
   let connection = "connecting";
@@ -51,10 +58,10 @@ function createViewer(electron, options = {}) {
   let viewerUrl = "";
   let loadGeneration = 0;
   let closed = false;
-  let message = "Open the access page to request approval. The window stays visible while you wait.";
+  let message = "Connecting to your workspace…";
 
   const win = new BrowserWindow({
-    title: "Live Workspace Viewer", width: 880, height: 680,
+    title: `Live Workspace Viewer ${APP_VERSION}`, width: 880, height: 680,
     minWidth: 560, minHeight: 410, show: false, alwaysOnTop: true,
     skipTaskbar: false, backgroundColor: "#00000000", autoHideMenuBar: true,
     transparent: true, frame: false, backgroundMaterial: "none",
@@ -137,6 +144,9 @@ function createViewer(electron, options = {}) {
   function snapshot() {
     return {
       protection: protectedContent, supported, shortcut, pinShortcut,
+      version: APP_VERSION,
+      opening: Boolean(openingPromise), attempt: openAttempt,
+      failure: lastFailure ? { message: lastFailure.message, diagnostics: diagnosticDetails() } : null,
       opacityUpShortcut, opacityDownShortcut, clickThroughShortcut, toolbarShortcut,
       pinned, opacity: interactivePage ? 1 : opacity, connection, hasAnswer, streamPaused,
       hideAppIcon, iconHidden: !appIcon.isVisible(), iconLabel: platform === "darwin" ? "Dock" : "Taskbar",
@@ -270,8 +280,8 @@ function createViewer(electron, options = {}) {
     applyClickThrough();
   }
   function setLinkBarVisible(visible) {
-    linkHidden = visible !== true;
-    if (visible === true) toolbarHidden = false;
+    // The recipient always uses the bundled service address.
+    linkHidden = true;
     syncHeaderHeight();
     resizeView();
     if (!closed && !win.webContents.isDestroyed()) win.webContents.send("viewer:status-changed", snapshot());
@@ -385,7 +395,96 @@ function createViewer(electron, options = {}) {
     report("Access approved. Your live viewer is open. Choose Controls for window settings.");
   }
 
-  async function openViewer(raw) {
+  function diagnosticDetails() {
+    // No viewer links, credentials, cookies, answer text or local file paths.
+    return { app: "Live Workspace Viewer", version: APP_VERSION,
+      platform: options.platform ?? process.platform, osRelease: options.release ?? os.release(),
+      arch: process.arch, electron: process.versions.electron || "test", attempts: openAttempt,
+      error: lastFailure ? { code: lastFailure.code, stage: lastFailure.stage, ...lastFailure.evidence } : null };
+  }
+  async function copyDiagnostics() {
+    const details = diagnosticDetails();
+    // Only classifications and HTTP status leave this function, never proxy addresses or response bodies.
+    const origin = new URL(viewerUrl || initialUrl).origin;
+    let proxyTimer;
+    const proxyCheck = Promise.race([
+      Promise.resolve().then(() => viewerSession.resolveProxy?.(origin)),
+      new Promise(resolve => { proxyTimer = setTimeout(resolve, 5000); })
+    ]).finally(() => clearTimeout(proxyTimer));
+    const [proxy, health] = await Promise.allSettled([
+      proxyCheck,
+      Promise.resolve().then(async () => {
+        if (!viewerSession.fetch) return null;
+        const response = await viewerSession.fetch(`${origin}/health`, {
+          credentials: "omit", redirect: "error", signal: AbortSignal.timeout(5000)
+        });
+        await response.body?.cancel();
+        return response.status;
+      })
+    ]);
+    details.proxy = proxy.status === "fulfilled" && typeof proxy.value === "string"
+      ? proxy.value.trim() === "DIRECT" ? "direct" : "configured" : "unknown";
+    details.health = health.status === "fulfilled" && Number.isInteger(health.value)
+      ? { httpStatus: health.value } : { status: "unavailable" };
+    electron.clipboard.writeText(JSON.stringify(details, null, 2));
+    return { ok: true };
+  }
+  function openViewer(raw = initialUrl) {
+    if (openingPromise) return openingPromise;
+    if (closed) return Promise.resolve({ ok: false, error: "The viewer is closed." });
+    retryAbort = new AbortController();
+    const signal = retryAbort.signal;
+    const delays = options.retryDelays ?? [1000, 3000];
+    const deadline = Date.now() + (options.loadTimeoutMs ?? 90000);
+    openingPromise = Promise.resolve().then(async () => {
+      let result;
+      for (let index = 0; index <= delays.length; index++) {
+        if (closed || signal.aborted) return { ok: false, error: "The viewer is closed." };
+        openAttempt = index + 1;
+        lastFailure = null;
+        report(index ? `Reconnecting… attempt ${openAttempt} of ${delays.length + 1}.` : "Connecting to your workspace…");
+        result = await openOnce(raw, Math.max(1, deadline - Date.now()));
+        if (result.ok || !lastFailure || lastFailure.stage !== "load-page" || !RETRYABLE.has(lastFailure.code) || index === delays.length) break;
+        if (Date.now() + delays[index] >= deadline) break;
+        report(`Connection interrupted. Retrying in ${delays[index] / 1000} seconds…`);
+        try { await wait(delays[index], undefined, { signal }); }
+        catch { return { ok: false, error: "The viewer is closed." }; }
+      }
+      return result;
+    }).finally(() => {
+      openingPromise = null;
+      retryAbort = null;
+      if (!closed) report(lastFailure?.message || message);
+    });
+    return openingPromise;
+  }
+  async function openOnce(raw, timeoutMs) {
+    const context = { stage: "prepare", generation: loadGeneration, nextView: null, attached: false, evidence: {}, timeoutMs };
+    lastFailure = null;
+    try { return await openViewerInternal(raw, context); }
+    catch (error) {
+      if (context.generation !== loadGeneration || closed) return { ok: false, error: "A newer link was opened." };
+      const suppliedCode = networkCode(error?.code || error?.message);
+      const detailedCode = context.evidence.networkCode || context.evidence.mainFrameCode;
+      if ((!suppliedCode || suppliedCode === "ERR_FAILED") && detailedCode) error = { code: detailedCode };
+      lastFailure = { ...describeOpenError(error, context.stage), evidence: context.evidence };
+      const failedView = context.nextView;
+      if (failedView) {
+        try { if (context.attached) win.contentView.removeChildView(failedView); } catch {}
+        try { if (!failedView.webContents.isDestroyed()) failedView.webContents.close(); } catch {}
+        if (view === failedView) view = null;
+      }
+      try { showInteractivePage(lastFailure.message); }
+      catch {
+        interactivePage = true;
+        toolbarHidden = false;
+        syncHeaderHeight();
+        report(lastFailure.message);
+      }
+      return { ok: false, error: lastFailure.message, diagnostics: diagnosticDetails() };
+    }
+  }
+  async function openViewerInternal(raw, context) {
     if (closed) return { ok: false, error: "The viewer is closed." };
     let next;
     try { next = normalizeViewerUrl(raw); }
@@ -399,23 +498,43 @@ function createViewer(electron, options = {}) {
       }
       loadGeneration++;
       viewerUrl = "";
-      showInteractivePage("Capture protection is unavailable. The live page was not opened.");
-      return { ok: false, error: message };
+      lastFailure = { code: "APP_PROTECTION_UNAVAILABLE", stage: "prepare", message: "Capture protection is unavailable on this system. The live page was not opened.", evidence: {} };
+      showInteractivePage(lastFailure.message);
+      return { ok: false, error: message, diagnostics: diagnosticDetails() };
     }
     const generation = ++loadGeneration;
+    context.generation = generation;
     if (view) {
       win.contentView.removeChildView(view);
       view.webContents.close();
+      view = null;
     }
     viewerUrl = next;
+    context.stage = "create-view";
     const nextView = new WebContentsView({ webPreferences: {
       session: viewerSession, nodeIntegration: false, contextIsolation: true,
       sandbox: true, webSecurity: true, devTools: false,
       allowRunningInsecureContent: false, backgroundThrottling: false, transparent: true
     } });
+    context.nextView = nextView;
     view = nextView;
+    context.stage = "configure-view";
     const wc = nextView.webContents;
     const isCurrent = () => generation === loadGeneration && !closed && view === nextView;
+    const captureFailure = (event, errorCode, errorDescription, _url, isMainFrame) => {
+      if (!isCurrent() || (event.isMainFrame ?? isMainFrame) !== true) return;
+      const code = networkCode(event.errorDescription || errorDescription);
+      if (code && code !== "ERR_ABORTED") context.evidence.mainFrameCode = code;
+      const number = event.errorCode ?? errorCode;
+      if (Number.isInteger(number)) context.evidence.errorNumber = number;
+    };
+    wc.on("did-fail-load", captureFailure);
+    wc.on("did-fail-provisional-load", captureFailure);
+    viewerSession.webRequest?.onErrorOccurred({ urls: [new URL(next).origin + "/*"] }, details => {
+      if (!isCurrent() || details.webContentsId !== wc.id || details.resourceType !== "mainFrame") return;
+      const code = networkCode(details.error);
+      if (code && code !== "ERR_ABORTED") context.evidence.networkCode = code;
+    });
     const syncPageMode = title => {
       if (!isCurrent()) return;
       if (isReadyViewer(wc.getURL(), next, title)) activateReadyViewer();
@@ -430,7 +549,7 @@ function createViewer(electron, options = {}) {
       const target = typeof destination === "string" ? destination : event.url;
       if (!allowedNavigation(target, next)) {
         event.preventDefault();
-        report("A link to another website was blocked. Paste a new viewer link above if needed.");
+        report("A link to another website was blocked. This app stays connected to your workspace.");
       }
     };
     wc.on("will-navigate", guardNavigation);
@@ -447,35 +566,37 @@ function createViewer(electron, options = {}) {
       if (isMainFrame) syncPageMode(wc.getTitle());
     });
     wc.on("will-attach-webview", event => event.preventDefault());
-    wc.on("render-process-gone", () => {
-      if (isCurrent()) showInteractivePage("The viewer stopped responding. Click Reload to reconnect.");
+    wc.on("render-process-gone", (_event, details = {}) => {
+      if (isCurrent()) {
+        if (["clean-exit", "abnormal-exit", "killed", "crashed", "oom", "launch-failed", "integrity-failure"].includes(details.reason)) context.evidence.rendererReason = details.reason;
+        showInteractivePage("The viewer stopped responding. Choose Reload to reconnect.");
+      }
     });
+    context.stage = "attach-view";
     win.contentView.addChildView(nextView);
+    context.attached = true;
     resizeView();
     showInteractivePage("Connecting… a sleeping server can take up to a minute.");
-    try {
-      await wc.loadURL(next);
-      if (generation !== loadGeneration || closed) return { ok: false, error: "A newer link was opened." };
-      syncPageMode(wc.getTitle());
-      return { ok: true, ...snapshot() };
-    } catch {
-      if (generation === loadGeneration && !closed) showInteractivePage("Could not load the viewer. Check the link or click Reload to retry.");
-      return { ok: false, error: "Could not load the viewer. Check the link or try again." };
-    }
+    context.stage = "load-page";
+    await loadPage(wc, next, context.timeoutMs);
+    if (generation !== loadGeneration || closed) return { ok: false, error: "A newer link was opened." };
+    context.stage = "ready";
+    syncPageMode(wc.getTitle());
+    return { ok: true, ...snapshot() };
   }
 
   function trusted(event) {
-    return event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame && event.senderFrame.url === homeUrl;
+    return trustedToolbar(event, win.webContents, homePath);
   }
   function handle(name, action) {
     ipcMain.handle(`viewer:${name}`, (event, ...args) => {
-      if (!trusted(event)) throw new Error("This action is available only in the viewer toolbar.");
+      if (!trusted(event)) throw new Error("APP_TOOLBAR: Open the app's own local toolbar to use this action.");
       return action(...args);
     });
   }
   handle("status", snapshot);
-  handle("open", openViewer);
-  handle("reload", () => viewerUrl ? openViewer(viewerUrl) : { ok: false, error: "Paste a viewer link first." });
+  handle("open", () => openViewer(initialUrl));
+  handle("reload", () => openViewer(viewerUrl || initialUrl));
   handle("hide", hide);
   handle("quit", () => win.close());
   handle("pin", setPinned);
@@ -485,6 +606,7 @@ function createViewer(electron, options = {}) {
   handle("linkBar", setLinkBarVisible);
   handle("toolbar", setToolbarVisible);
   handle("icon", setIconVisible);
+  handle("diagnostics", copyDiagnostics);
   handle("copy", copyAnswer);
   handle("clear", clearView);
   handle("theme", async () => {
@@ -492,12 +614,20 @@ function createViewer(electron, options = {}) {
     try { await view.webContents.executeJavaScript(`document.querySelector('#themeBtn')?.click()`); return { ok: true }; }
     catch { return { ok: false }; }
   });
-  win.webContents.on("did-finish-load", () => report(message));
+  let started = false;
+  win.webContents.on("did-finish-load", () => {
+    report(message);
+    if (!started && options.autoConnect !== false) {
+      started = true;
+      void openViewer(initialUrl);
+    }
+  });
   win.once("ready-to-show", () => {
     if (options.showWindow !== false && !closed) win.show();
   });
   win.on("closed", () => {
     closed = true;
+    retryAbort?.abort();
     loadGeneration++;
     stopPointerPoll();
     stopStatusPoll();
@@ -516,7 +646,7 @@ function createViewer(electron, options = {}) {
   return {
     window: win, snapshot, openViewer, hide, restore, setPinned, togglePinned,
     adjustOpacity, setClickThrough, toggleClickThrough, setPointerOverToolbar,
-    setLinkBarVisible, setToolbarVisible, setIconVisible, getView: () => view, getOpacity: () => opacity,
+    setLinkBarVisible, setToolbarVisible, setIconVisible, diagnosticDetails, getView: () => view, getOpacity: () => opacity,
     getHeaderHeight: () => headerHeight
   };
 }

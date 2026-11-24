@@ -121,6 +121,19 @@ test("does not relay user, hidden reasoning, or tool-directed messages", async (
   assert.deepEqual(h.answers(), ["Visible answer"]);
 });
 
+test("plain deltas require an identified visible assistant and retain non-public channel context", async () => {
+  const h = await capture(
+    frame({ delta: "Unscoped private text" }) +
+    frame({ message: assistant("Visible answer", { channel: "final" }) }) +
+    frame({ delta: "Hidden text", channel: "analysis" }) +
+    frame({ delta: "More hidden text" }) +
+    frame({ message: assistant("Public", { channel: "final" }) }) +
+    frame({ delta: " answer" })
+  );
+  assert.equal(h.answers().at(-1), "Public answer");
+  assert.equal(h.answers().some(answer => /private|Hidden|hidden/.test(answer)), false);
+});
+
 test("replays an answer and completion when content loaded after the stream", async () => {
   const h = await capture(frame({ message: assistant("Already complete") }));
   h.events.length = 0;
@@ -142,6 +155,25 @@ test("a late response from an earlier request cannot overwrite the latest reply"
   await oldRequest;
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.deepEqual(h.answers(), ["Latest"]);
+});
+
+test("history requested during generation cannot overwrite the answer after streaming ends", async () => {
+  let streamController, resolveHistory;
+  const stream = new ReadableStream({ start(controller) { streamController = controller; } });
+  const h = hook((_input, init) => init?.method === "POST"
+    ? Promise.resolve(sse(stream))
+    : new Promise(resolve => { resolveHistory = resolve; }));
+  await h.window.fetch("/backend-api/conversation", { method: "POST" });
+  const history = h.window.fetch("/backend-api/conversation/current");
+  streamController.enqueue(new TextEncoder().encode(frame({ message: assistant("Fresh answer") })));
+  streamController.close();
+  await waitFor(() => h.events.some(event => event.type === "stream-end"));
+  resolveHistory(json({ conversation_id: "current", current_node: "old", mapping: {
+    old: { message: assistant("Stale history answer") }
+  } }));
+  await history;
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(h.answers().at(-1), "Fresh answer");
 });
 
 function content() {
@@ -219,6 +251,30 @@ test("completed network snapshot cannot hide a subsequent DOM-only answer", () =
   assert.equal(c.run("getLatestAnswer()"), "Current answer");
   c.candidates([current, element("Next answer")]);
   assert.equal(c.run("getLatestAnswer()"), "Next answer");
+});
+
+test("a reused assistant element can publish a later shorter DOM-only answer", () => {
+  const c = content();
+  const current = element("Current answer with more detail");
+  c.candidates([current]);
+  c.event({ type: "stream-start", requestId: 1 });
+  c.event({ type: "answer", requestId: 1, text: "Current answer with more detail" });
+  c.event({ type: "stream-end", requestId: 1 });
+  assert.equal(c.run("getLatestAnswer()"), "Current answer with more detail");
+  Object.assign(current, { innerText: "Current", textContent: "Current", text: "Current" });
+  assert.equal(c.run("getLatestAnswer()"), "Current");
+});
+
+test("a completed network answer stays available while the visible text catches up", () => {
+  const c = content();
+  const current = element("Part");
+  c.candidates([current]);
+  c.event({ type: "stream-start", requestId: 1 });
+  c.event({ type: "answer", requestId: 1, text: "Partial answer finished" });
+  c.event({ type: "stream-end", requestId: 1 });
+  assert.equal(c.run("getLatestAnswer()"), "Partial answer finished");
+  Object.assign(current, { innerText: "Partial answer", textContent: "Partial answer", text: "Partial answer" });
+  assert.equal(c.run("getLatestAnswer()"), "Partial answer finished");
 });
 
 test("starting another request clears the previous network snapshot", () => {
